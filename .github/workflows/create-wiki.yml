@@ -1,0 +1,531 @@
+name: Create and Populate Wiki
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  create-wiki:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Enable Wiki
+        run: |
+          gh repo edit ${{ github.repository }} --enable-wiki
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Initialize wiki repository
+        run: |
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git config --global user.name "github-actions[bot]"
+          git clone https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.wiki.git wiki-repo || {
+            mkdir wiki-repo && cd wiki-repo && git init
+            git remote add origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.wiki.git
+          }
+
+      - name: Write wiki pages
+        run: |
+          cd wiki-repo
+
+          cat > Home.md << 'WIKIEOF'
+          # TheSecondBrain Wiki
+
+          **A personal knowledge vault that compounds over time — powered by LLMs, lived in the terminal.**
+
+          > *Inspired by the LLM Wiki pattern by Andrej Karpathy: instead of re-deriving knowledge on every query, the LLM incrementally builds and maintains a persistent, interlinked wiki — so knowledge accumulates rather than evaporates.*
+
+          ---
+
+          ## Pages
+
+          - [[What Is TheSecondBrain]]
+          - [[Getting Started]]
+          - [[Architecture]]
+          - [[Features]]
+          - [[Commands Reference]]
+          - [[Keyboard Shortcuts]]
+          - [[Configuration]]
+          - [[Directory Layout]]
+          - [[How It Works ― The Pipeline]]
+          - [[Use Cases]]
+
+          ---
+
+          ## Quick Start
+
+          ```bash
+          # Prerequisites: Go 1.22+
+          git clone https://github.com/${{ github.repository }}
+          cd TheSecondBrain
+          bash install.sh
+
+          # Create a new project
+          mkdir my-project && cd my-project
+          brain
+          ```
+
+          On first launch, a setup wizard asks for your **Rakuten AI Gateway key**.
+
+          ---
+
+          ## What Is TheSecondBrain?
+
+          Most AI document tools work like search: drop files in, ask questions, the LLM retrieves relevant chunks and answers. The knowledge is never kept. Ask the same question tomorrow and it rediscovers from scratch.
+
+          **TheSecondBrain is different.** When you add a source, the LLM reads it and *writes wiki pages* — extracting concepts, entities, key learnings, and wiring them together with cross-references. Every question you ask enriches the wiki further. The knowledge compounds.
+
+          You curate sources and ask questions. The LLM writes and maintains everything else.
+          WIKIEOF
+
+          cat > What-Is-TheSecondBrain.md << 'WIKIEOF'
+          # What Is TheSecondBrain
+
+          **TheSecondBrain** is a terminal-based personal knowledge management system that uses Large Language Models (LLMs) to build and maintain a persistent, interlinked wiki from your documents, code, and notes.
+
+          ---
+
+          ## The Problem It Solves
+
+          Most AI document tools work like search:
+          1. Drop files in
+          2. Ask questions
+          3. LLM retrieves relevant chunks and answers
+          4. Knowledge evaporates — ask the same question tomorrow, it rediscovers from scratch
+
+          **TheSecondBrain is different.** The LLM doesn't just answer — it *writes and maintains wiki pages*, extracting concepts, entities, key learnings, and wiring them together with cross-references. Knowledge compounds over time rather than evaporating after each session.
+
+          ---
+
+          ## Core Philosophy
+
+          - **You curate sources** — drop any file into `raw/`
+          - **The LLM maintains the wiki** — it writes, updates, and cross-references pages automatically
+          - **Knowledge accumulates** — each new source and question enriches the existing wiki
+
+          ---
+
+          ## Key Differentiators
+
+          | Traditional RAG | TheSecondBrain |
+          |-----------------|----------------|
+          | Answers from raw documents | Answers from a maintained wiki |
+          | Knowledge evaporates after each session | Knowledge accumulates over time |
+          | You manage the knowledge structure | LLM manages the wiki structure |
+          | Search-based retrieval | Wiki + embeddings hybrid |
+
+          ---
+
+          **Next:** [[Getting Started]] | [[Architecture]] | [[Features]]
+          WIKIEOF
+
+          cat > Getting-Started.md << 'WIKIEOF'
+          # Getting Started
+
+          This guide walks you through installing TheSecondBrain and running your first session.
+
+          ---
+
+          ## Prerequisites
+
+          - **Go 1.22+** — required to build the `brain` binary
+          - **Rakuten AI Gateway API key** — for LLM and embeddings
+
+          ---
+
+          ## Installation
+
+          ### Option 1: Install Script (Recommended)
+
+          ```bash
+          git clone https://github.com/${{ github.repository }}
+          cd TheSecondBrain
+          bash install.sh
+          ```
+
+          ### Option 2: Manual Build
+
+          ```bash
+          git clone https://github.com/${{ github.repository }}
+          cd TheSecondBrain/tui
+          go build -o brain .
+          sudo mv brain /usr/local/bin/brain
+          ```
+
+          ---
+
+          ## First Run
+
+          ```bash
+          mkdir my-project && cd my-project
+          brain
+          ```
+
+          On first launch, a setup wizard prompts for your **Rakuten AI Gateway key**. It creates:
+
+          - `~/.config/secondbrain/config.yaml` — global settings
+          - `~/.config/secondbrain/.env` — API key (never committed, 600 permissions)
+          - `raw/`, `wiki/`, `knowledge-base/` — project directories
+
+          ---
+
+          ## Basic Workflow
+
+          ```bash
+          # 1. Drop files into raw/
+          cp ~/Downloads/research-paper.pdf raw/
+          cp -r ~/code/my-android-app raw/
+
+          # 2. Process (or files are auto-analyzed within 3 seconds of being dropped)
+          /pull
+
+          # 3. Ask questions
+          What design patterns does my-android-app use?
+
+          # 4. Keep useful answers
+          /save Android Architecture Overview
+          ```
+
+          ---
+
+          **Next:** [[Commands Reference]] | [[Features]] | [[Configuration]]
+          WIKIEOF
+
+          cat > Architecture.md << 'WIKIEOF'
+          # Architecture
+
+          TheSecondBrain is built around three layers and two config scopes.
+
+          ---
+
+          ## System Diagram
+
+          ```
+          ┌─────────────────────────────────────────────────────────────┐
+          │                      brain  (TUI)                           │
+          │          Go + Bubble Tea  ·  runs in current directory      │
+          └───────────────────┬─────────────────────────────────────────┘
+                              │
+                  ┌───────────┼───────────┐
+                  ▼           ▼           ▼
+             /analyze       Query      /fixwiki
+            (ingest)       (RAG)      (correct)
+                  │           │           │
+                  ▼           ▼           │
+          ┌───────────┐  ┌──────────┐    │
+          │   wiki/   │  │knowledge │◄───┘
+          │           │  │  -base/  │
+          │ sources/  │  │          │
+          │ entities/ │  │embeddings│
+          │ concepts/ │  │amendments│
+          │synthesis/ │  │ metadata │
+          │ index.md  │  └──────────┘
+          │  log.md   │
+          └───────────┘
+                  ▲
+                  │  LLM writes all wiki pages
+                  │
+          ┌───────────┐
+          │   raw/    │  ← You drop anything here
+          └───────────┘
+          ```
+
+          ---
+
+          ## Three Layers
+
+          | Layer | Owner | Contents |
+          |-------|-------|----------|
+          | `raw/` | You | Source files — immutable, never modified |
+          | `wiki/` | LLM | Structured knowledge — concepts, entities, summaries |
+          | `knowledge-base/` | System | Embeddings, metadata, amendment trail |
+
+          ---
+
+          ## Technology Stack
+
+          | Component | Technology |
+          |-----------|-----------|
+          | TUI | Go + `charmbracelet/bubbletea` |
+          | LLM | Rakuten AI Gateway → `gpt-4o` |
+          | Embeddings | `text-embedding-3-small` |
+          | Vector store | Flat JSON with cosine similarity |
+          | File watching | `fsnotify/fsnotify` |
+
+          ---
+
+          **Next:** [[Features]] | [[How It Works ― The Pipeline]] | [[Getting Started]]
+          WIKIEOF
+
+          cat > Features.md << 'WIKIEOF'
+          # Features
+
+          ## Ingest Pipeline
+
+          - **Any file type** — markdown, text, code, HTML, images (JPG, PNG, SVG)
+          - **Nested folders** — entire `raw/` tree is walked, any depth
+          - **Multi-page ingest** — one source creates 5–15 wiki pages
+          - **Auto-watch** — new files trigger analysis after a 3-second debounce
+          - **Hash-based change detection** — only new/modified files are processed
+          - **Image analysis** — images described by vision AI
+
+          ---
+
+          ## RAG Query Engine
+
+          - **Similarity threshold filtering** — chunks below `min_similarity` (0.25) are discarded
+          - **LLM confidence-scored references** — each citation includes AI-calculated confidence %
+          - **Conversation history** — last 6 turns passed for follow-up awareness
+          - **Strict wiki-only answers** — LLM never uses outside knowledge
+
+          ---
+
+          ## Wiki Corrections & Amendment Audit Trail
+
+          - **Natural language corrections** — say "that's wrong, it should be X"
+          - **`/fixwiki <name> <correction>`** — explicit correction by page name
+          - **Contradiction detection** — `CONSISTENT` / `CONTRADICTORY` analysis before applying
+          - **Amendment records** — every correction logged with full audit trail
+          - **`/amendments`** — list all records (`✓` applied, `⚡` force-applied)
+
+          ---
+
+          ## Research Gap Tracking
+
+          - **`/gap <topic>`** — creates a research stub for missing knowledge
+          - Stubs are indexed and surface in future searches
+
+          ---
+
+          ## TUI
+
+          - **Streaming output** — answers appear token by token
+          - **Command history** — `↑`/`↓` to navigate previous inputs
+          - **Clipboard** — `Ctrl+Y` copies last answer
+          - **Shell passthrough** — `!<command>` runs any shell command
+          - **File-in-chat** — mention a file path to auto-copy to `raw/`
+
+          ---
+
+          **Next:** [[Commands Reference]] | [[Keyboard Shortcuts]] | [[Architecture]]
+          WIKIEOF
+
+          cat > Commands-Reference.md << 'WIKIEOF'
+          # Commands Reference
+
+          | Command | Description |
+          |---------|-------------|
+          | `/pull` | Full pipeline: scan `raw/` → extract knowledge → update `wiki/` → sync embeddings |
+          | `/analyze` | Force re-analyze `raw/` (reprocess all files) |
+          | `/sync` | Re-embed changed wiki pages (after manual edits) |
+          | `/save <title>` | Save last answer as `wiki/synthesis/<slug>.md` |
+          | `/fixwiki <name> <fix>` | Correct a wiki page by name or path |
+          | `/gap <topic>` | Flag a missing topic — creates a research stub |
+          | `/amendments` | List all amendment audit records |
+          | `/lint` | Wiki health check — broken links, orphans, stubs, contradictions |
+          | `/status` | Show project dir, raw file count, wiki pages, KB chunks, API key status |
+          | `/config` | Show global config (dir, model, embeddings, paths) |
+          | `/config key` | Show masked API key |
+          | `/config reset` | Remove global config — next launch triggers setup |
+          | `/logout` | Same as `/config reset` — removes `~/.config/secondbrain/` |
+          | `/tips` | Show quick-start guide |
+          | `/help` | Show all commands |
+          | `!<command>` | Run a shell command from the project directory |
+
+          ---
+
+          **Next:** [[Keyboard Shortcuts]] | [[Features]] | [[Getting Started]]
+          WIKIEOF
+
+          cat > Keyboard-Shortcuts.md << 'WIKIEOF'
+          # Keyboard Shortcuts
+
+          | Key | Action |
+          |-----|--------|
+          | `↑` / `↓` | Navigate command history |
+          | `PgUp` / `PgDn` | Scroll chat history |
+          | `Ctrl+Y` | Copy last answer to clipboard |
+          | `Ctrl+C` | Quit |
+          | `confirm` | Apply a wiki correction |
+          | `force` | Force-apply despite contradiction warnings |
+
+          ---
+
+          **Next:** [[Commands Reference]] | [[Features]]
+          WIKIEOF
+
+          cat > Configuration.md << 'WIKIEOF'
+          # Configuration
+
+          ## Global Config (`~/.config/secondbrain/`)
+
+          ### `config.yaml`
+
+          ```yaml
+          llm:
+            model: "gpt-4o"
+            max_tokens: 4096
+            base_url: "https://api.ai.public.rakuten-it.com/openai/v1"
+
+          embeddings:
+            model: "text-embedding-3-small"
+            base_url: "https://api.ai.public.rakuten-it.com/openai/v1"
+
+          rag:
+            chunk_size: 1500      # characters per chunk
+            top_k: 5              # max chunks retrieved per query
+            min_similarity: 0.25  # discard chunks below this cosine score
+          ```
+
+          ### `.env`
+
+          ```
+          RAKUTEN_AI_GATEWAY_KEY=your_key_here
+          ```
+
+          ---
+
+          ## Config Commands
+
+          | Command | Description |
+          |---------|-------------|
+          | `/config` | Show config directory and settings |
+          | `/config key` | Show masked API key |
+          | `/config reset` | Remove config — triggers setup on next launch |
+          | `/logout` | Same as `/config reset` |
+
+          ---
+
+          **Next:** [[Directory Layout]] | [[Getting Started]]
+          WIKIEOF
+
+          cat > Directory-Layout.md << 'WIKIEOF'
+          # Directory Layout
+
+          ## Project Directory
+
+          ```
+          <your-project>/
+          ├── raw/                          ← Drop any files here (immutable)
+          ├── wiki/
+          │   ├── sources/                  ← One summary per raw source
+          │   ├── entities/                 ← People, orgs, products, tools
+          │   ├── concepts/                 ← Ideas, patterns, theories
+          │   ├── synthesis/                ← Saved query results
+          │   ├── index.md                  ← Auto-maintained catalog
+          │   └── log.md                    ← Operation history
+          └── knowledge-base/
+              ├── embeddings/store.json     ← Vector store
+              ├── metadata/sources.json     ← Content hashes
+              ├── amendments/               ← Correction audit trail
+              └── output/                   ← Reports and exports
+          ```
+
+          ## Global Config
+
+          ```
+          ~/.config/secondbrain/
+          ├── config.yaml                   ← Global model + RAG settings
+          └── .env                          ← API key (600 permissions)
+          ```
+
+          ---
+
+          **Next:** [[Configuration]] | [[How It Works ― The Pipeline]]
+          WIKIEOF
+
+          cat > 'How-It-Works-The-Pipeline.md' << 'WIKIEOF'
+          # How It Works — The Pipeline
+
+          ## Pipeline Flow
+
+          ```
+          Drop file into raw/
+                  │
+                  ▼  (auto after 3s, or /pull)
+          [Analyzer — LLM]
+            · Reads file content (text, code, or vision for images)
+            · Checks wiki/index.md for existing related pages
+            · Returns JSON: pages to create/update + log entry
+                  │
+                  ▼
+          wiki/ pages written
+            wiki/sources/slug.md
+            wiki/entities/name.md
+            wiki/concepts/name.md
+            (typically 5–15 pages per source)
+                  │
+                  ▼  (/sync or auto after /pull)
+          [Embeddings]
+            · Chunks each wiki page by paragraph
+            · Embeds via text-embedding-3-small
+            · Stores in knowledge-base/embeddings/store.json
+                  │
+                  ▼  (on question)
+          [RAG Query]
+            · Embeds question
+            · Cosine search → top-K chunks filtered by min_similarity
+            · LLM answers from wiki context only
+            · LLM scores each reference by actual contribution
+          ```
+
+          ---
+
+          ## Step Details
+
+          1. **File Detection** — `fsnotify` watches `raw/`; 3-second debounce; hash check skips unchanged files
+          2. **Analysis** — LLM reads content, checks existing wiki, returns JSON array of pages
+          3. **Wiki Writing** — pages written; existing pages merged; `wiki/log.md` updated
+          4. **Embedding** — pages chunked and embedded; vectors stored in flat JSON
+          5. **Query** — question embedded; cosine search; LLM answers from wiki context only
+
+          ---
+
+          **Next:** [[Architecture]] | [[Features]]
+          WIKIEOF
+
+          cat > Use-Cases.md << 'WIKIEOF'
+          # Use Cases
+
+          ## 1. Deep Research
+
+          Drop papers and articles into `raw/` over weeks. The brain builds an interlinked wiki of concepts, entities, and findings — automatically cross-referenced. By the end you have a structured knowledge base, not a pile of highlights.
+
+          **Flow:** Drop paper → `/pull` → wiki pages created → ask follow-up questions → `/save` syntheses
+
+          ---
+
+          ## 2. Codebase Documentation
+
+          Point the brain at a cloned repository. It reads architecture, patterns, modules, and dependencies — and writes a living wiki. New teammates onboard by querying the brain.
+
+          **Flow:** Clone repo into `raw/` → `/pull` → wiki created with architecture, patterns, open questions
+
+          ---
+
+          ## 3. Team Knowledge Base
+
+          Feed Slack threads, meeting transcripts, design docs, and customer notes. The brain maintains a shared wiki that no one has to manually update.
+
+          **Flow:** Export Slack/Notion → drop into `raw/` → wiki grows → team queries instead of searching Slack
+
+          ---
+
+          ## Other Use Cases
+
+          - **Personal learning journal** — drop articles; build a personal reference wiki
+          - **Meeting intelligence** — drop transcripts; query past decisions
+          - **Competitive intelligence** — track competitor signals over time
+
+          ---
+
+          **Next:** [[Getting Started]] | [[Features]] | [[Commands Reference]]
+          WIKIEOF
+
+      - name: Push wiki content
+        run: |
+          cd wiki-repo
+          git add .
+          git diff --cached --quiet && echo "No changes" || git commit -m "Initialize wiki with comprehensive documentation"
+          git push origin HEAD:master || git push origin HEAD:main
