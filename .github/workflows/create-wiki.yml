@@ -2,6 +2,11 @@ name: Create and Populate Wiki
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - main
+      - master
+      - copilot/create-wiki-page
 
 permissions:
   contents: write
