@@ -1,0 +1,26 @@
+# TheSecondBrain Configuration
+# Secrets go in .env — this file is safe to commit.
+
+llm:
+  model: "gpt-4o"
+  max_tokens: 4096
+  base_url: "https://<BASE_URL>/openai/v1"
+
+embeddings:
+  model: "text-embedding-3-small"
+  base_url: "https://<BASE_URL>/openai/v1"
+  dimensions: 1536
+
+paths:
+  raw: "raw"
+  wiki: "wiki"
+  knowledge_base: "knowledge-base"
+
+rag:
+  chunk_size: 1500      # characters per chunk
+  chunk_overlap: 200    # overlap between chunks
+  top_k: 5              # max chunks retrieved per query
+  min_similarity: 0.25  # discard chunks below this cosine similarity (0.0–1.0)
+
+wiki:
+  dedup_threshold: 0.92 # cosine similarity above which content is considered duplicate
