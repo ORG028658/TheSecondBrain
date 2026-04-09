@@ -1,0 +1,29 @@
+# Secrets
+.env
+
+# Raw sources (personal files — opt in by removing this line if you want to track them)
+raw/
+
+# Knowledge base (derived, can be rebuilt from wiki)
+knowledge-base/
+wiki/
+
+# Logs
+logs/
+
+# claude
+CLAUDE.md
+
+# Go build artifacts
+tui/brain
+tui/*.exe
+tui/.gocache/
+tui/internal/
+
+# OS
+.DS_Store
+Thumbs.db
+config.yaml
+log.md
+overview.md
+index.md
