@@ -2,7 +2,7 @@
 
 **A personal knowledge vault that compounds over time — powered by LLMs, lived in the terminal.**
 
-> *Inspired by the [LLM Wiki pattern](inspiration/llm-wiki.md): instead of re-deriving knowledge on every query, the LLM incrementally builds and maintains a persistent, interlinked wiki — so knowledge accumulates rather than evaporates.*
+> *Inspired by the [LLM Wiki pattern](inspiration/llm-wiki.md) by Andrej Karpathy: instead of re-deriving knowledge on every query, the LLM incrementally builds and maintains a persistent, interlinked wiki — so knowledge accumulates rather than evaporates.*
 
 ---
 
