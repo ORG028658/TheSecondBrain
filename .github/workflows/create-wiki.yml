@@ -15,12 +15,6 @@ jobs:
   create-wiki:
     runs-on: ubuntu-latest
     steps:
-      - name: Enable Wiki
-        run: |
-          gh repo edit ${{ github.repository }} --enable-wiki
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
       - name: Initialize wiki repository
         run: |
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
