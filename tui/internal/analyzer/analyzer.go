@@ -69,8 +69,20 @@ func (a *Analyzer) AnalyzeAll(ctx context.Context, progress func(string)) (strin
 
 	var created, updated, skipped int
 
+	ignorePatterns := loadBrainIgnore(rawPath)
+
 	err := filepath.WalkDir(rawPath, func(path string, d fs.DirEntry, err error) error {
-		if err != nil || d.IsDir() {
+		if err != nil {
+			return nil
+		}
+		if d.IsDir() {
+			if autoIgnoredDirs[d.Name()] {
+				return filepath.SkipDir
+			}
+			rel, _ := filepath.Rel(rawPath, path)
+			if rel != "." && matchesIgnorePattern(rel+"/", ignorePatterns) {
+				return filepath.SkipDir
+			}
 			return nil
 		}
 		if strings.HasPrefix(filepath.Base(path), ".") {
@@ -78,6 +90,14 @@ func (a *Analyzer) AnalyzeAll(ctx context.Context, progress func(string)) (strin
 		}
 
 		rel, _ := filepath.Rel(a.cfg.Paths.Raw, path)
+
+		if !shouldAnalyzeFile(path) {
+			return nil
+		}
+		if matchesIgnorePattern(rel, ignorePatterns) {
+			return nil
+		}
+
 		h := fileHash(path)
 
 		if meta, ok := sources[rel]; ok && meta.Hash == h {
@@ -268,14 +288,16 @@ func (a *Analyzer) analyzeTextFile(ctx context.Context, path, relPath string) (*
 		return nil, err
 	}
 	content := string(data)
-	if len(content) > 80000 {
-		content = content[:80000] + "\n...[truncated]"
+	content, truncated := smartTruncate(content, 80000)
+	truncNote := ""
+	if truncated {
+		truncNote = "\n⚠ This file was too large and has been truncated. Analyze what is available and note the truncation in the source page summary."
 	}
 
 	indexContent, _ := a.wiki.ReadIndex()
 	userPrompt := fmt.Sprintf(
-		"Ingest this file into the wiki.\n\nFile: %s\n\nContent:\n```\n%s\n```\n\nReturn ONLY valid JSON.",
-		relPath, content)
+		"Ingest this file into the wiki.\n\nFile: %s%s\n\nContent:\n```\n%s\n```\n\nReturn ONLY valid JSON.",
+		relPath, truncNote, content)
 
 	return a.callLLM(ctx, analyzerSystemPrompt(indexContent), nil, userPrompt)
 }
@@ -506,4 +528,159 @@ func saveSources(path string, sources sourcesFile) {
 	os.MkdirAll(filepath.Dir(path), 0755) //nolint:errcheck
 	data, _ := json.MarshalIndent(sources, "", "  ")
 	os.WriteFile(path, data, 0644) //nolint:errcheck
+}
+
+// ── repository filtering ──────────────────────────────────────────────────────
+
+// textExtensions is the allowlist of file extensions the brain will analyze.
+// Anything not in this list is silently skipped — binaries, lock files,
+// compiled artifacts, and generated bundles never reach the LLM.
+var textExtensions = map[string]bool{
+	// Systems
+	".go": true, ".rs": true, ".c": true, ".cpp": true, ".h": true,
+	".hpp": true, ".cs": true, ".fs": true, ".fsx": true,
+	// JVM
+	".java": true, ".kt": true, ".kts": true, ".scala": true,
+	".clj": true, ".cljs": true, ".groovy": true,
+	// Scripting
+	".py": true, ".rb": true, ".php": true, ".pl": true, ".lua": true,
+	// JS/TS
+	".js": true, ".ts": true, ".jsx": true, ".tsx": true,
+	".mjs": true, ".cjs": true,
+	// Frontend
+	".vue": true, ".svelte": true, ".astro": true,
+	".html": true, ".htm": true,
+	".css": true, ".scss": true, ".sass": true, ".less": true,
+	// Config & data
+	".yaml": true, ".yml": true, ".json": true, ".toml": true,
+	".ini": true, ".cfg": true, ".conf": true, ".xml": true,
+	".graphql": true, ".gql": true, ".proto": true,
+	// Infra & ops
+	".tf": true, ".hcl": true,
+	".sh": true, ".bash": true, ".zsh": true, ".fish": true, ".ps1": true,
+	// Docs
+	".md": true, ".mdx": true, ".txt": true, ".rst": true, ".adoc": true,
+	// Functional & other
+	".ex": true, ".exs": true, ".erl": true, ".hs": true, ".elm": true,
+	".ml": true, ".mli": true, ".swift": true, ".dart": true,
+	// SQL
+	".sql": true,
+}
+
+// autoIgnoredDirs are pruned with filepath.SkipDir — their entire subtree
+// is never walked. No .brainignore entry needed for these.
+var autoIgnoredDirs = map[string]bool{
+	// VCS
+	".git": true, ".svn": true, ".hg": true,
+	// JS/TS
+	"node_modules": true, ".next": true, ".nuxt": true, ".svelte-kit": true, ".turbo": true,
+	// Build outputs
+	"dist": true, "build": true, ".build": true, "out": true, "bin": true, "obj": true,
+	// Package managers
+	"vendor": true,
+	// Python
+	"__pycache__": true, ".pytest_cache": true, ".mypy_cache": true, ".ruff_cache": true,
+	// JVM
+	"target": true, ".gradle": true, ".m2": true,
+	// IDEs
+	".idea": true, ".vscode": true, ".vs": true,
+	// Coverage & caches
+	"coverage": true, ".nyc_output": true, ".cache": true,
+	// Temp
+	"tmp": true, ".tmp": true, "temp": true, "logs": true,
+}
+
+// noExtFiles are known no-extension filenames worth analyzing.
+var noExtFiles = map[string]bool{
+	"makefile": true, "dockerfile": true, "readme": true, "license": true,
+	"contributing": true, "changelog": true, "authors": true,
+	"gemfile": true, "rakefile": true, "procfile": true, "vagrantfile": true,
+	"jenkinsfile": true,
+}
+
+// shouldAnalyzeFile returns true if the file should be sent to the LLM.
+// Images pass through to the vision path. Everything else must be in textExtensions.
+func shouldAnalyzeFile(path string) bool {
+	base := filepath.Base(path)
+	ext := strings.ToLower(filepath.Ext(base))
+
+	switch ext {
+	case ".jpg", ".jpeg", ".png", ".gif", ".webp":
+		return true // handled by vision path
+	case ".pdf":
+		return false // skipped downstream anyway — short-circuit here
+	case "":
+		return noExtFiles[strings.ToLower(base)]
+	}
+	return textExtensions[ext]
+}
+
+// loadBrainIgnore reads raw/.brainignore for user-defined ignore patterns.
+// Lines starting with # and blank lines are skipped. Returns nil if absent.
+func loadBrainIgnore(rawPath string) []string {
+	data, err := os.ReadFile(filepath.Join(rawPath, ".brainignore"))
+	if err != nil {
+		return nil
+	}
+	var patterns []string
+	for _, line := range strings.Split(string(data), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		patterns = append(patterns, line)
+	}
+	return patterns
+}
+
+// matchesIgnorePattern reports whether relPath matches any .brainignore pattern.
+// Supports glob patterns (*.min.js), basename matches, full relative path matches,
+// and directory patterns with trailing slash (node_modules/).
+func matchesIgnorePattern(relPath string, patterns []string) bool {
+	base := filepath.Base(relPath)
+	relSlash := filepath.ToSlash(relPath)
+	for _, pattern := range patterns {
+		isDir := strings.HasSuffix(pattern, "/")
+		p := strings.TrimSuffix(pattern, "/")
+		if isDir {
+			for _, component := range strings.Split(relSlash, "/") {
+				if ok, _ := filepath.Match(p, component); ok {
+					return true
+				}
+			}
+			continue
+		}
+		if ok, _ := filepath.Match(pattern, base); ok {
+			return true
+		}
+		if ok, _ := filepath.Match(pattern, relSlash); ok {
+			return true
+		}
+	}
+	return false
+}
+
+// smartTruncate cuts content near maxChars at a logical boundary (blank line)
+// rather than mid-statement. Returns the (possibly truncated) content and
+// whether truncation occurred.
+func smartTruncate(content string, maxChars int) (string, bool) {
+	if len(content) <= maxChars {
+		return content, false
+	}
+	// Search the 4KB window before the limit for a clean break point
+	windowStart := maxChars - 4000
+	if windowStart < 0 {
+		windowStart = 0
+	}
+	window := content[windowStart:maxChars]
+
+	// Prefer blank line — paragraph/block boundary
+	if idx := strings.LastIndex(window, "\n\n"); idx >= 0 {
+		return content[:windowStart+idx] + "\n\n// ... [truncated — file too large to analyze in full]", true
+	}
+	// Fall back to last newline
+	if idx := strings.LastIndex(window, "\n"); idx >= 0 {
+		return content[:windowStart+idx] + "\n// ... [truncated]", true
+	}
+	return content[:maxChars] + " ... [truncated]", true
 }
