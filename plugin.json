@@ -9,7 +9,7 @@
   },
   "homepage": "https://github.com/ORG028658/TheSecondBrain/blob/main/README.md",
   "repository": "https://github.com/ORG028658/TheSecondBrain",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "keywords": ["knowledge-management", "wiki", "second-brain", "pkm", "rag", "llm"],
   "skills": "./skills/",
   "commands": [

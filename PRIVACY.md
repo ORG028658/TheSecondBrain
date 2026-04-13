@@ -77,6 +77,8 @@ Your API key is stored locally in:
 ~/.config/secondbrain/.env
 ```
 
+as the variable `LLM_COMPATIBLE_API_KEY`. This accepts keys from any supported provider — OpenAI, Groq, Azure OpenAI, Ollama, Rakuten AI Gateway, or any OpenAI-compatible endpoint you configure.
+
 This file is created with `600` permissions (readable only by you). It is never committed to version control, never transmitted to the developer, and never included in any logs or exports produced by this tool.
 
 ---

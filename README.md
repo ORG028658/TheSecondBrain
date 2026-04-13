@@ -259,8 +259,23 @@ rag:
 
 **Secrets** (`~/.config/secondbrain/.env`):
 ```
-RAKUTEN_AI_GATEWAY_KEY=your_key_here
+LLM_COMPATIBLE_API_KEY=your_api_key_here
 ```
+
+### Compatible API Providers
+
+TheSecondBrain works with **any OpenAI-compatible API endpoint**. Change `base_url` and `model` in `config.yaml`, then set `LLM_COMPATIBLE_API_KEY` to that provider's key:
+
+| Provider | `base_url` | Example model |
+|----------|-----------|---------------|
+| [OpenAI](https://platform.openai.com) | `https://api.openai.com/v1` | `gpt-4o` |
+| [Groq](https://groq.com) | `https://api.groq.com/openai/v1` | `llama-3.3-70b-versatile` |
+| [Azure OpenAI](https://azure.microsoft.com/products/ai-services/openai-service) | `https://<resource>.openai.azure.com/openai` | your deployment name |
+| [Ollama](https://ollama.com) (local, free) | `http://localhost:11434/v1` | `llama3.2` |
+| [Together AI](https://together.ai) | `https://api.together.xyz/v1` | `meta-llama/Llama-3-70b` |
+| Rakuten AI Gateway | `https://api.ai.public.rakuten-it.com/openai/v1` | `gpt-4o` |
+
+> **Anthropic / Claude:** Anthropic's native API is not OpenAI-compatible. Access Claude models through [AWS Bedrock](https://aws.amazon.com/bedrock/) or [Google Vertex AI](https://cloud.google.com/vertex-ai), both of which expose OpenAI-compatible endpoints.
 
 ---
 
