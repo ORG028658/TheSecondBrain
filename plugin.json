@@ -1,0 +1,24 @@
+{
+  "name": "second-brain",
+  "version": "1.0.0",
+  "description": "A personal knowledge vault that compounds over time. Drop sources into raw/ and Claude writes a structured, interlinked wiki — extracting concepts, entities, and key learnings that persist across every session.",
+  "author": {
+    "name": "A S M Sayem",
+    "email": "your@email.com",
+    "url": "https://github.com/yourusername"
+  },
+  "homepage": "https://github.com/yourusername/TheSecondBrain",
+  "repository": "https://github.com/yourusername/TheSecondBrain",
+  "license": "MIT",
+  "keywords": ["knowledge-management", "wiki", "second-brain", "pkm", "rag", "llm"],
+  "skills": "./skills/",
+  "commands": [
+    "./commands/ingest.md",
+    "./commands/lint.md",
+    "./commands/gap.md",
+    "./commands/save.md",
+    "./commands/wiki-status.md"
+  ],
+  "agents": "./agents/",
+  "hooks": "./hooks.json"
+}
