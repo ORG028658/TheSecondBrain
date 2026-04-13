@@ -93,12 +93,20 @@ Feed the brain Slack threads, meeting transcripts, design docs, and customer cal
 
 ```bash
 # Prerequisites: Go 1.22+
-git clone <this-repo>
-cd TheSecondBrain/tui
-go build -o brain .
-sudo mv brain /usr/local/bin/brain
+go install github.com/ORG028658/TheSecondBrain/tui@latest
+```
 
-# Or use the install script:
+This installs the `brain` binary into your Go bin directory (`$GOBIN` or `$(go env GOPATH)/bin`).
+
+If that directory is not already on your `PATH`, add it:
+
+```bash
+export PATH="$(go env GOPATH)/bin:$PATH"
+```
+
+For local development from a checked-out repo, you can still use:
+
+```bash
 bash install.sh
 ```
 
