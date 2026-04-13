@@ -36,7 +36,7 @@ type RAG struct {
 }
 
 func New(s *store.Store, e *embeddings.Client, cfg *config.Config) *RAG {
-	c := openai.DefaultConfig(os.Getenv("RAKUTEN_AI_GATEWAY_KEY"))
+	c := openai.DefaultConfig(os.Getenv("LLM_COMPATIBLE_API_KEY"))
 	c.BaseURL = cfg.LLM.BaseURL
 	return &RAG{store: s, embed: e, llm: openai.NewClientWithConfig(c), cfg: cfg}
 }
