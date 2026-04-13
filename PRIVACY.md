@@ -1,10 +1,11 @@
 # Privacy Policy
 
 **Product:** TheSecondBrain  
-**Developer:** A S M Sayem  
-**Organisation:** ORG028658 (company-provided GitHub account, Rakuten)  
+**Developer:** A S M Sayem (personal project)  
 **Repository:** https://github.com/ORG028658/TheSecondBrain  
 **Last updated:** 2026-04-13  
+
+> **Note:** This is a personal open-source project by A S M Sayem, hosted on a company-provided GitHub account. It is **not** an official Rakuten product. Rakuten bears no responsibility for this tool, its behaviour, or its data handling. Use at your own risk.
 
 ---
 
@@ -12,7 +13,7 @@
 
 TheSecondBrain is a locally-run, terminal-native knowledge vault. It processes files on your machine and sends their content to a configurable LLM API to build and query a wiki. This policy explains exactly what data moves where.
 
-**Short version:** Your files and queries leave your machine only to reach the LLM API you configure. The developer collects nothing.
+**Short version:** Your files and queries leave your machine only to reach the LLM API you configure. The developer collects nothing. This tool is provided as-is with no warranties of any kind.
 
 ---
 
@@ -51,7 +52,7 @@ By default, TheSecondBrain is configured to use the **Rakuten AI Gateway**:
 https://api.ai.public.rakuten-it.com/openai/v1
 ```
 
-When using this default, your data is subject to Rakuten's own data handling and privacy policies in addition to this document. Refer to your organisation's internal documentation for the applicable Rakuten AI Gateway data retention and processing terms.
+When using this default, your data is subject to Rakuten's own data handling and privacy policies. The developer makes no representations about Rakuten AI Gateway's data retention or processing terms — review those independently before use.
 
 ### Using a different API provider
 
@@ -92,15 +93,19 @@ TheSecondBrain includes a Claude Code plugin (`plugin.json`, `skills/`, `command
 
 ---
 
-## 6. Data You Are Responsible For
+## 6. No Warranty & Limitation of Liability
 
-Because this tool processes whatever files you place in `raw/`, you are responsible for ensuring that:
+This tool is provided **"as-is"**, without warranty of any kind — express or implied — including but not limited to warranties of merchantability, fitness for a particular purpose, or non-infringement.
 
-- You have the right to process and transmit any file you add to the vault
-- You comply with applicable data protection regulations (e.g. GDPR, APPI) when processing files that contain personal data about others
-- You follow your organisation's policies regarding sending data to external AI services
+The developer (A S M Sayem) accepts **no responsibility or liability** for:
 
-If you are processing files that contain personal or sensitive information, review your organisation's AI usage policy before using the default Rakuten AI Gateway endpoint.
+- Any data loss, leakage, or unintended transmission resulting from use of this tool
+- How you use this tool or what files you choose to process with it
+- The data handling practices of any third-party API provider you configure
+- Any compliance or regulatory consequences arising from your use
+- Any damages, direct or indirect, arising from use or inability to use this tool
+
+**You use this tool entirely at your own risk.** It is your responsibility to ensure that any files you add to `raw/` are appropriate to send to the API endpoint you have configured, and that doing so complies with any agreements or policies that apply to you.
 
 ---
 
