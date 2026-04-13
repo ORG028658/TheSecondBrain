@@ -18,7 +18,6 @@ CLAUDE.md
 tui/brain
 tui/*.exe
 tui/.gocache/
-tui/internal/
 
 # OS
 .DS_Store
