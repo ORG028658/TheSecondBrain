@@ -36,6 +36,18 @@ type SearchResult struct {
 	Score    float32
 }
 
+// NewFresh returns an empty in-memory store at path without loading from disk.
+// Use when an existing store file is corrupt and must be rebuilt from scratch.
+func NewFresh(path string) *Store {
+	return &Store{
+		path: path,
+		data: storeData{
+			Entries:    []Entry{},
+			PageHashes: map[string]string{},
+		},
+	}
+}
+
 func New(storePath string) (*Store, error) {
 	s := &Store{
 		path: storePath,

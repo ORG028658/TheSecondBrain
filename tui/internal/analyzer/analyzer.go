@@ -192,6 +192,9 @@ Return a markdown health report with sections: ## Critical / ## Minor / ## Sugge
 	if err != nil {
 		return "", err
 	}
+	if len(resp.Choices) == 0 {
+		return "", fmt.Errorf("LLM returned empty response")
+	}
 
 	report := resp.Choices[0].Message.Content
 	a.wiki.AppendLog(fmt.Sprintf("## [%s] lint\n%s", today(), firstLine(report))) //nolint:errcheck
@@ -233,6 +236,9 @@ Lines 2+: 2-3 sentences of reasoning.`, wikiPath, excerpt, proposed)
 	if err != nil {
 		return "", false, err
 	}
+	if len(resp.Choices) == 0 {
+		return "", false, fmt.Errorf("LLM returned empty response")
+	}
 	analysis = resp.Choices[0].Message.Content
 	consistent = strings.HasPrefix(strings.ToUpper(strings.TrimSpace(analysis)), "CONSISTENT")
 	return analysis, consistent, nil
@@ -261,6 +267,9 @@ Rewrite the page incorporating the correction. Keep the same format, frontmatter
 	})
 	if err != nil {
 		return "", err
+	}
+	if len(resp.Choices) == 0 {
+		return "", fmt.Errorf("LLM returned empty response")
 	}
 	return resp.Choices[0].Message.Content, nil
 }
@@ -350,6 +359,9 @@ func (a *Analyzer) callLLM(ctx context.Context, system string, parts []openai.Ch
 	})
 	if err != nil {
 		return nil, err
+	}
+	if len(resp.Choices) == 0 {
+		return nil, fmt.Errorf("LLM returned empty response")
 	}
 
 	raw := extractJSON(resp.Choices[0].Message.Content)

@@ -5,8 +5,8 @@
 raw/
 
 # Knowledge base (derived, can be rebuilt from wiki)
-knowledge-base/
-wiki/
+/knowledge-base/
+/wiki/
 
 # Logs
 logs/

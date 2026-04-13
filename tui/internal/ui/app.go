@@ -145,7 +145,10 @@ func NewModel(cfg *config.Config) *Model {
 	ensureVaultStructure(cfg)
 
 	storePath := filepath.Join(cfg.Paths.KnowledgeBase, "embeddings", "store.json")
-	s, _ := store.New(storePath)
+	s, storeErr := store.New(storePath)
+	if storeErr != nil {
+		s = store.NewFresh(storePath)
+	}
 
 	embedder := embeddings.New(cfg.Embeddings.Model, cfg.Embeddings.BaseURL)
 	wikiSvc := wiki.New(cfg.Paths.Wiki)
@@ -187,6 +190,13 @@ func NewModel(cfg *config.Config) *Model {
 		m.msgs = append(m.msgs, chatMsg{
 			role:    "system",
 			content: fmt.Sprintf("wiki: %d pages  ·  kb: %d chunks  ·  %s", pages, chunks, randomGreeting()),
+			at:      time.Now(),
+		})
+	}
+	if storeErr != nil {
+		m.msgs = append(m.msgs, chatMsg{
+			role:    "error",
+			content: fmt.Sprintf("⚠ Knowledge base was corrupted and has been reset — run /pull to rebuild.\n  (%v)", storeErr),
 			at:      time.Now(),
 		})
 	}
@@ -291,7 +301,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.viewport.HalfViewDown()
 
 		case msg.Type == tea.KeyEnter:
-			if m.state != stateIdle {
+			if m.state != stateIdle && m.state != stateConfirming {
 				break
 			}
 			input := strings.TrimSpace(m.textInput.Value())
