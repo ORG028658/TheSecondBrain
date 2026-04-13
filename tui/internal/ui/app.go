@@ -647,7 +647,7 @@ func (m *Model) cmdStatus() tea.Cmd {
 			m.cfg.Paths.Wiki,
 			pages, chunks, watching,
 			config.ConfigDir(),
-			maskKey(os.Getenv("RAKUTEN_AI_GATEWAY_KEY")))}
+			maskKey(os.Getenv("LLM_COMPATIBLE_API_KEY")))}
 	}
 }
 
@@ -1421,7 +1421,7 @@ func formatError(err error) string {
 	var hint string
 	switch {
 	case strings.Contains(s, "401") || strings.Contains(s, "unauthorized"):
-		hint = "Check RAKUTEN_AI_GATEWAY_KEY in ~/.config/secondbrain/.env"
+		hint = "Check LLM_COMPATIBLE_API_KEY in ~/.config/secondbrain/.env"
 	case strings.Contains(s, "connection refused") || strings.Contains(s, "no such host"):
 		hint = "Cannot reach the API — check your internet connection."
 	case strings.Contains(s, "context deadline") || strings.Contains(s, "timeout"):
