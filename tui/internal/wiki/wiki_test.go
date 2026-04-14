@@ -50,8 +50,11 @@ func TestWrite_ValidPaths(t *testing.T) {
 
 	cases := []string{
 		"index.md",
+		"wiki/index.md",
 		"sources/my-source.md",
+		"wiki/sources/my-source.md",
 		"concepts/sub/deep.md",
+		"wiki/concepts/sub/deep.md",
 	}
 	for _, relPath := range cases {
 		t.Run(relPath, func(t *testing.T) {
@@ -83,11 +86,66 @@ func TestWrite_RoundTrip(t *testing.T) {
 	if err := w.Write("sources/test.md", content); err != nil {
 		t.Fatalf("Write failed: %v", err)
 	}
-	got, err := w.Read("sources/test.md")
+	got, err := w.Read("wiki/sources/test.md")
 	if err != nil {
 		t.Fatalf("Read failed: %v", err)
 	}
 	if got != content {
 		t.Errorf("round-trip mismatch:\n  got:  %q\n  want: %q", got, content)
+	}
+}
+
+func TestWrite_WikiPrefixDoesNotNest(t *testing.T) {
+	w := newTempWiki(t)
+	os.MkdirAll(w.root, 0755)
+
+	if err := w.Write("wiki/sources/prefixed.md", "# prefixed"); err != nil {
+		t.Fatalf("Write failed: %v", err)
+	}
+
+	if _, err := os.Stat(filepath.Join(w.root, "sources", "prefixed.md")); err != nil {
+		t.Fatalf("expected canonical file location: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(w.root, "wiki", "sources", "prefixed.md")); !os.IsNotExist(err) {
+		t.Fatalf("unexpected nested wiki/wiki path created")
+	}
+}
+
+func TestListPages_ReturnsCanonicalWikiPrefix(t *testing.T) {
+	w := newTempWiki(t)
+	os.MkdirAll(w.root, 0755)
+
+	if err := w.Write("sources/a.md", "# A"); err != nil {
+		t.Fatalf("Write failed: %v", err)
+	}
+	if err := w.Write("wiki/concepts/b.md", "# B"); err != nil {
+		t.Fatalf("Write failed: %v", err)
+	}
+
+	got, err := w.ListPages()
+	if err != nil {
+		t.Fatalf("ListPages failed: %v", err)
+	}
+
+	want := []string{"wiki/concepts/b.md", "wiki/sources/a.md"}
+	if strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Fatalf("ListPages mismatch:\n  got:  %v\n  want: %v", got, want)
+	}
+}
+
+func TestExistsAndContentHashAcceptCanonicalPaths(t *testing.T) {
+	w := newTempWiki(t)
+	os.MkdirAll(w.root, 0755)
+
+	const content = "# Canonical\n"
+	if err := w.Write("wiki/entities/test.md", content); err != nil {
+		t.Fatalf("Write failed: %v", err)
+	}
+
+	if !w.Exists("wiki/entities/test.md") {
+		t.Fatalf("Exists should accept canonical wiki/ path")
+	}
+	if got := w.ContentHash("wiki/entities/test.md"); got != HashBytes([]byte(content)) {
+		t.Fatalf("ContentHash mismatch: got %q", got)
 	}
 }

@@ -26,7 +26,10 @@ func New(root string) *Wiki {
 }
 
 func (w *Wiki) Write(relPath, content string) error {
-	fullPath := filepath.Join(w.root, relPath)
+	fullPath, err := w.fullPath(relPath)
+	if err != nil {
+		return err
+	}
 	if err := w.guardPath(fullPath); err != nil {
 		return err
 	}
@@ -37,7 +40,10 @@ func (w *Wiki) Write(relPath, content string) error {
 }
 
 func (w *Wiki) Read(relPath string) (string, error) {
-	fullPath := filepath.Join(w.root, relPath)
+	fullPath, err := w.fullPath(relPath)
+	if err != nil {
+		return "", err
+	}
 	if err := w.guardPath(fullPath); err != nil {
 		return "", err
 	}
@@ -46,6 +52,36 @@ func (w *Wiki) Read(relPath string) (string, error) {
 		return "", err
 	}
 	return string(data), nil
+}
+
+func (w *Wiki) fullPath(relPath string) (string, error) {
+	normalized, err := normalizeRelPath(relPath)
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(w.root, normalized), nil
+}
+
+func normalizeRelPath(relPath string) (string, error) {
+	trimmed := strings.TrimSpace(relPath)
+	if trimmed == "" {
+		return "", fmt.Errorf("wiki: empty path")
+	}
+
+	slashed := filepath.ToSlash(trimmed)
+	slashed = strings.TrimPrefix(slashed, "./")
+	slashed = strings.TrimPrefix(slashed, "/")
+	slashed = strings.TrimPrefix(slashed, "wiki/")
+
+	cleaned := filepath.Clean(filepath.FromSlash(slashed))
+	if cleaned == "." || cleaned == "" {
+		return "", fmt.Errorf("wiki: empty path")
+	}
+	return cleaned, nil
+}
+
+func canonicalPagePath(relPath string) string {
+	return "wiki/" + filepath.ToSlash(relPath)
 }
 
 // guardPath ensures the resolved absolute path stays inside the wiki root.
@@ -61,12 +97,20 @@ func (w *Wiki) guardPath(fullPath string) error {
 }
 
 func (w *Wiki) Exists(relPath string) bool {
-	_, err := os.Stat(filepath.Join(w.root, relPath))
+	fullPath, err := w.fullPath(relPath)
+	if err != nil {
+		return false
+	}
+	_, err = os.Stat(fullPath)
 	return err == nil
 }
 
 func (w *Wiki) ContentHash(relPath string) string {
-	data, err := os.ReadFile(filepath.Join(w.root, relPath))
+	fullPath, err := w.fullPath(relPath)
+	if err != nil {
+		return ""
+	}
+	data, err := os.ReadFile(fullPath)
 	if err != nil {
 		return ""
 	}
@@ -90,7 +134,7 @@ func (w *Wiki) ListPages() ([]string, error) {
 		}
 		rel, _ := filepath.Rel(w.root, path)
 		if rel != "index.md" && rel != "log.md" {
-			pages = append(pages, rel)
+			pages = append(pages, canonicalPagePath(rel))
 		}
 		return nil
 	})
@@ -132,7 +176,11 @@ func (w *Wiki) UpdateIndex(pages []PageInfo) error {
 
 	groups := map[string][]PageInfo{}
 	for _, p := range pages {
-		parts := strings.SplitN(p.RelPath, "/", 2)
+		normalized := strings.TrimPrefix(filepath.ToSlash(p.RelPath), "wiki/")
+		parts := strings.SplitN(normalized, "/", 2)
+		if len(parts) == 0 {
+			continue
+		}
 		groups[parts[0]] = append(groups[parts[0]], p)
 	}
 

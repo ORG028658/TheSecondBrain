@@ -200,6 +200,16 @@ func NewModel(cfg *config.Config) *Model {
 			at:      time.Now(),
 		})
 	}
+	if nestedRoot := detectNestedWikiRoot(cfg.Paths.Wiki); nestedRoot != "" {
+		m.msgs = append(m.msgs, chatMsg{
+			role: "system",
+			content: fmt.Sprintf(
+				"Warning: detected nested wiki content at %s.\nThis usually came from the old wiki/wiki path bug. New writes use canonical wiki/... paths, but you should inspect or migrate the nested files before trusting mixed results.",
+				nestedRoot,
+			),
+			at: time.Now(),
+		})
+	}
 	return m
 }
 
@@ -643,6 +653,10 @@ func (m *Model) cmdStatus() tea.Cmd {
 		if _, err := os.Stat(m.cfg.Paths.Raw); err != nil {
 			rawStatus = "✗ missing"
 		}
+		nestedWarning := ""
+		if nestedRoot := detectNestedWikiRoot(m.cfg.Paths.Wiki); nestedRoot != "" {
+			nestedWarning = "\n\nWarning    : nested wiki content detected at " + nestedRoot
+		}
 		return resultMsg{content: fmt.Sprintf(
 			"Project dir : %s\n"+
 				"raw/        : %s  [%s]  %d files\n"+
@@ -651,13 +665,14 @@ func (m *Model) cmdStatus() tea.Cmd {
 				"KB chunks   : %d\n"+
 				"Auto-watch  : %s\n\n"+
 				"Config dir  : %s\n"+
-				"API key     : %s",
+				"API key     : %s%s",
 			m.cfg.ProjectPath,
 			m.cfg.Paths.Raw, rawStatus, rawCount,
 			m.cfg.Paths.Wiki,
 			pages, chunks, watching,
 			config.ConfigDir(),
-			maskKey(os.Getenv("LLM_COMPATIBLE_API_KEY")))}
+			maskKey(os.Getenv("LLM_COMPATIBLE_API_KEY")),
+			nestedWarning)}
 	}
 }
 
@@ -1262,6 +1277,30 @@ func countFiles(root string) int {
 	return count
 }
 
+func detectNestedWikiRoot(wikiRoot string) string {
+	nested := filepath.Join(wikiRoot, "wiki")
+	info, err := os.Stat(nested)
+	if err != nil || !info.IsDir() {
+		return ""
+	}
+
+	foundMarkdown := false
+	filepath.WalkDir(nested, func(_ string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return nil
+		}
+		if strings.HasSuffix(d.Name(), ".md") {
+			foundMarkdown = true
+			return fs.SkipAll
+		}
+		return nil
+	})
+	if foundMarkdown {
+		return nested
+	}
+	return ""
+}
+
 func slugify(s string) string {
 	s = strings.ToLower(s)
 	var b strings.Builder
@@ -1454,8 +1493,10 @@ func tipsMessage(rawPath string) string {
 
   1. Drop any file into:
        %s
-     (docs, notes, PDFs, images, code — any file type)
+     (docs, notes, images, code, and other supported text files)
      Files are auto-analyzed when added.
+
+     Note: PDFs are not supported yet in this build.
 
   2. Run /pull to process files immediately.
 
