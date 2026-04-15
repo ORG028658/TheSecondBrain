@@ -1,0 +1,24 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 -c \"import sys, json; d = json.load(sys.stdin); p = d.get('file_path', ''); (sys.stderr.write('Blocked: raw/ is immutable — TheSecondBrain Rule 1. Write to wiki/ instead.\\n') or sys.exit(2)) if ('/raw/' in p or p.startswith('raw/')) else None\""
+          }
+        ]
+      },
+      {
+        "matcher": "Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 -c \"import sys, json; d = json.load(sys.stdin); p = d.get('file_path', ''); (sys.stderr.write('Blocked: raw/ is immutable — TheSecondBrain Rule 1. Edit wiki/ pages instead.\\n') or sys.exit(2)) if ('/raw/' in p or p.startswith('raw/')) else None\""
+          }
+        ]
+      }
+    ]
+  }
+}
