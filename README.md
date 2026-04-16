@@ -137,6 +137,17 @@ brain
 
 ---
 
+### Uninstall
+
+```bash
+brain --uninstall
+```
+
+Removes the binary and `~/.config/secondbrain/` (API key + settings).
+Your vault data (`raw/`, `wiki/`, `knowledge-base/`) is never touched.
+
+---
+
 **For developers — build from source:**
 
 ```bash
