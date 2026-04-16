@@ -115,21 +115,69 @@ Feed the brain Slack threads, meeting transcripts, design docs, and customer cal
 
 ```bash
 # Prerequisites: Go 1.22+
-go install github.com/ORG028658/TheSecondBrain/tui@latest
-```
+git clone <this-repo>
+cd TheSecondBrain
 
-This installs the `brain` binary into your Go bin directory (`$GOBIN` or `$(go env GOPATH)/bin`).
-
-If that directory is not already on your `PATH`, add it:
-
-```bash
-export PATH="$(go env GOPATH)/bin:$PATH"
-```
-
-For local development from a checked-out repo, you can still use:
-
-```bash
+# Build and install to /usr/local/bin
 bash install.sh
+```
+
+### Make `brain` available globally
+
+The install script places the binary at `/usr/local/bin/brain`. If running `brain` after
+install gives `command not found`, `/usr/local/bin` is not on your `$PATH`. Fix it once:
+
+**Check first — it may already work:**
+
+```bash
+which brain        # should print /usr/local/bin/brain
+brain --help       # should print usage
+```
+
+**If `command not found`, add `/usr/local/bin` to your shell PATH:**
+
+```bash
+# Detect your shell config file
+echo $SHELL
+# /bin/zsh  → edit ~/.zshrc
+# /bin/bash → edit ~/.bash_profile  (macOS) or ~/.bashrc (Linux)
+```
+
+```bash
+# For zsh (default on macOS Catalina and later):
+echo 'export PATH="/usr/local/bin:$PATH"' >> ~/.zshrc
+source ~/.zshrc
+
+# For bash:
+echo 'export PATH="/usr/local/bin:$PATH"' >> ~/.bash_profile
+source ~/.bash_profile
+```
+
+Then verify:
+
+```bash
+which brain          # → /usr/local/bin/brain
+brain --help
+```
+
+**Alternative — install to your home directory (no sudo required):**
+
+```bash
+mkdir -p ~/.local/bin
+cp /usr/local/bin/brain ~/.local/bin/brain   # if already installed, or:
+cd TheSecondBrain/tui && go build -o ~/.local/bin/brain .
+
+# Add to PATH (one-time):
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc   # or ~/.bash_profile
+source ~/.zshrc
+```
+
+**Verify the installation is complete:**
+
+```bash
+brain --help        # prints usage
+brain --version     # prints version (when implemented)
+echo $PATH | tr ':' '\n' | grep -E "local/bin"   # confirms PATH entry exists
 ```
 
 ### First Run
