@@ -113,71 +113,37 @@ Feed the brain Slack threads, meeting transcripts, design docs, and customer cal
 
 ### Install
 
+**One command — no Git, no Go, no technical knowledge needed:**
+
 ```bash
-# Prerequisites: Go 1.22+
-git clone <this-repo>
+curl -fsSL https://raw.githubusercontent.com/ORG028658/TheSecondBrain/main/install.sh | bash
+```
+
+The script:
+- Detects your OS and chip automatically (macOS Intel / Apple Silicon, Linux x86 / ARM)
+- Downloads the pre-built binary from the latest GitHub release
+- Installs it to `~/.local/bin/brain` — no `sudo` required
+- Adds `~/.local/bin` to your shell PATH automatically
+- Tells you exactly what to run when it's done
+
+After the script finishes, run the command it prints (usually `source ~/.zshrc && brain`).
+
+**Verify the install worked:**
+
+```bash
+which brain   # → /Users/<you>/.local/bin/brain
+brain
+```
+
+---
+
+**For developers — build from source:**
+
+```bash
+# Requires Go 1.22+
+git clone https://github.com/ORG028658/TheSecondBrain
 cd TheSecondBrain
-
-# Build and install to /usr/local/bin
-bash install.sh
-```
-
-### Make `brain` available globally
-
-The install script places the binary at `/usr/local/bin/brain`. If running `brain` after
-install gives `command not found`, `/usr/local/bin` is not on your `$PATH`. Fix it once:
-
-**Check first — it may already work:**
-
-```bash
-which brain        # should print /usr/local/bin/brain
-brain --help       # should print usage
-```
-
-**If `command not found`, add `/usr/local/bin` to your shell PATH:**
-
-```bash
-# Detect your shell config file
-echo $SHELL
-# /bin/zsh  → edit ~/.zshrc
-# /bin/bash → edit ~/.bash_profile  (macOS) or ~/.bashrc (Linux)
-```
-
-```bash
-# For zsh (default on macOS Catalina and later):
-echo 'export PATH="/usr/local/bin:$PATH"' >> ~/.zshrc
-source ~/.zshrc
-
-# For bash:
-echo 'export PATH="/usr/local/bin:$PATH"' >> ~/.bash_profile
-source ~/.bash_profile
-```
-
-Then verify:
-
-```bash
-which brain          # → /usr/local/bin/brain
-brain --help
-```
-
-**Alternative — install to your home directory (no sudo required):**
-
-```bash
-mkdir -p ~/.local/bin
-cp /usr/local/bin/brain ~/.local/bin/brain   # if already installed, or:
-cd TheSecondBrain/tui && go build -o ~/.local/bin/brain .
-
-# Add to PATH (one-time):
-echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc   # or ~/.bash_profile
-source ~/.zshrc
-```
-
-**Verify the installation is complete:**
-
-```bash
-brain --help        # prints usage
-brain --version     # prints version (when implemented)
-echo $PATH | tr ':' '\n' | grep -E "local/bin"   # confirms PATH entry exists
+bash install.sh   # builds from source, installs to /usr/local/bin
 ```
 
 ### First Run
