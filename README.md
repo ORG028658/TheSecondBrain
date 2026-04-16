@@ -16,6 +16,27 @@ You curate sources and ask questions. The LLM writes and maintains everything el
 
 ---
 
+## Project Status
+
+**Status:** Beta
+
+TheSecondBrain is currently tuned for **internal/team use first** and careful external experimentation. It is useful today, but it is **not production-grade software yet**.
+
+Current expectations:
+
+- Core wiki path handling is tested and canonicalized around `wiki/...`
+- CI runs build, vet, tests, and formatting checks on PRs
+- Docs are kept aligned with current behavior
+- Release tags produce downloadable binaries for macOS and Linux
+
+Known limitations:
+
+- **PDF ingestion is not supported yet**
+- Vault repair for previously corrupted `wiki/wiki/...` layouts is warning-only for now
+- This remains a single-user local tool, not a multi-user or hosted product
+
+---
+
 ## Architecture
 
 ```
@@ -46,7 +67,8 @@ You curate sources and ask questions. The LLM writes and maintains everything el
 ┌───────────┐
 │   raw/    │  ← You drop anything here
 │           │     (docs, images, code,
-│  any file │      notes, PDFs, repos)
+│ supported │      notes, repos)
+│   files   │
 └───────────┘
 
 Global config: ~/.config/secondbrain/  (API key, model settings)
@@ -170,11 +192,29 @@ On first launch, a setup wizard asks for your **Rakuten AI Gateway key**. It cre
 - `~/.config/secondbrain/.env` — API key (never committed)
 - `raw/`, `wiki/`, `knowledge-base/` — in the current directory
 
+### Supported Platforms
+
+- macOS
+- Linux
+- Go version: see [`tui/go.mod`](tui/go.mod)
+
+### Supported Inputs
+
+Currently supported:
+
+- markdown, text, HTML, and common config/data formats
+- source code and repository trees
+- common image formats (`.jpg`, `.jpeg`, `.png`, `.gif`, `.webp`)
+
+Not supported yet:
+
+- PDF ingestion
+
 ### Basic Workflow
 
 ```bash
 # 1. Drop files into raw/
-cp ~/Downloads/research-paper.pdf raw/
+cp ~/Downloads/research-notes.md raw/
 cp -r ~/code/my-android-app raw/
 
 # 2. Process (or files are auto-analyzed within 3 seconds of being dropped)
@@ -197,12 +237,13 @@ What design patterns does my-android-app use?
 ## Features
 
 ### Ingest Pipeline
-- **Any file type** — markdown, text, code (`.kt`, `.py`, `.go`), HTML, images (JPG, PNG, SVG), and more
+- **Many text, code, config, and image types** — markdown, text, code (`.kt`, `.py`, `.go`), HTML, YAML, JSON, and common images
 - **Nested folders** — the entire `raw/` tree is walked, any depth
 - **Multi-page ingest** — one source typically creates 5–15 wiki pages: a source summary, entity pages (people, tools, companies), concept pages, all interlinked
 - **Auto-watch** — file watcher monitors `raw/`; new files trigger analysis automatically after a 3-second debounce
 - **Hash-based change detection** — unchanged files are skipped; only new/modified files are processed
 - **Image analysis** — images are described by vision AI and integrated into relevant wiki pages
+- **Explicitly unsupported right now** — PDFs are skipped instead of partially parsed
 
 ### Wiki Structure
 ```
@@ -292,6 +333,24 @@ Every wiki page has:
 
 ---
 
+## Releases
+
+Install the latest release:
+
+```bash
+go install github.com/ORG028658/TheSecondBrain/tui@latest
+```
+
+Install a specific version:
+
+```bash
+go install github.com/ORG028658/TheSecondBrain/tui@v0.1.0
+```
+
+Tagged releases also publish prebuilt archives for macOS and Linux. See [RELEASE.md](RELEASE.md) for the release process and backup guidance.
+
+---
+
 ## Configuration
 
 **Global** (`~/.config/secondbrain/config.yaml`):
@@ -313,8 +372,23 @@ rag:
 
 **Secrets** (`~/.config/secondbrain/.env`):
 ```
-RAKUTEN_AI_GATEWAY_KEY=your_key_here
+LLM_COMPATIBLE_API_KEY=your_api_key_here
 ```
+
+### Compatible API Providers
+
+TheSecondBrain works with **any OpenAI-compatible API endpoint**. Change `base_url` and `model` in `config.yaml`, then set `LLM_COMPATIBLE_API_KEY` to that provider's key:
+
+| Provider | `base_url` | Example model |
+|----------|-----------|---------------|
+| [OpenAI](https://platform.openai.com) | `https://api.openai.com/v1` | `gpt-4o` |
+| [Groq](https://groq.com) | `https://api.groq.com/openai/v1` | `llama-3.3-70b-versatile` |
+| [Azure OpenAI](https://azure.microsoft.com/products/ai-services/openai-service) | `https://<resource>.openai.azure.com/openai` | your deployment name |
+| [Ollama](https://ollama.com) (local, free) | `http://localhost:11434/v1` | `llama3.2` |
+| [Together AI](https://together.ai) | `https://api.together.xyz/v1` | `meta-llama/Llama-3-70b` |
+| Rakuten AI Gateway | `https://api.ai.public.rakuten-it.com/openai/v1` | `gpt-4o` |
+
+> **Anthropic / Claude:** Anthropic's native API is not OpenAI-compatible. Access Claude models through [AWS Bedrock](https://aws.amazon.com/bedrock/) or [Google Vertex AI](https://cloud.google.com/vertex-ai), both of which expose OpenAI-compatible endpoints.
 
 ---
 
@@ -340,6 +414,30 @@ RAKUTEN_AI_GATEWAY_KEY=your_key_here
 ├── config.yaml                   ← Global model + RAG settings
 └── .env                          ← API key (600 permissions, never committed)
 ```
+
+---
+
+## Troubleshooting
+
+- `brain: command not found`
+  Add `$(go env GOPATH)/bin` or `$GOBIN` to your `PATH`.
+- `401` or unauthorized errors
+  Check `~/.config/secondbrain/.env` and confirm `LLM_COMPATIBLE_API_KEY` is valid for the configured provider.
+- Warning about nested `wiki/wiki/...`
+  This usually means the vault was touched by an older path bug. New writes are normalized, but you should inspect and migrate nested markdown files before trusting mixed results.
+- PDF files do nothing
+  PDF ingestion is not implemented yet in this beta.
+
+## Backup and Recovery
+
+Back up these paths regularly:
+
+- your project `wiki/`
+- your project `knowledge-base/`
+- your project `raw/` if the original source material is not stored elsewhere
+- `~/.config/secondbrain/` if you want to preserve config and API settings
+
+Treat `wiki/` and `knowledge-base/amendments/` as source-of-truth user data. `knowledge-base/embeddings/store.json` can usually be rebuilt with `/pull` or `/sync`.
 
 ---
 
@@ -401,3 +499,14 @@ This file is automatically loaded into every Claude Code session that opens the 
 | File watching | `fsnotify/fsnotify` |
 | Config | `gopkg.in/yaml.v3` + `joho/godotenv` |
 | Clipboard | `atotto/clipboard` |
+
+---
+
+## Project Docs
+
+- [CONTRIBUTING.md](CONTRIBUTING.md)
+- [SECURITY.md](SECURITY.md)
+- [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)
+- [ROADMAP.md](ROADMAP.md)
+- [RELEASE.md](RELEASE.md)
+- [PRIVACY.md](PRIVACY.md)

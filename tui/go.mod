@@ -1,4 +1,4 @@
-module secondbrain
+module github.com/ORG028658/TheSecondBrain/tui
 
 go 1.22
 

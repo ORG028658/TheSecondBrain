@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/ORG028658/TheSecondBrain/tui/internal/config"
+	"github.com/ORG028658/TheSecondBrain/tui/internal/ui"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/joho/godotenv"
-	"secondbrain/internal/config"
-	"secondbrain/internal/ui"
 )
 
 func main() {

@@ -5,8 +5,8 @@
 raw/
 
 # Knowledge base (derived, can be rebuilt from wiki)
-knowledge-base/
-wiki/
+/knowledge-base/
+/wiki/
 
 # Logs
 logs/
@@ -18,7 +18,6 @@ CLAUDE.md
 tui/brain
 tui/*.exe
 tui/.gocache/
-tui/internal/
 
 # OS
 .DS_Store
