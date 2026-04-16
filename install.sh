@@ -117,14 +117,15 @@ success "Installed to $INSTALL_DIR/$BINARY_NAME"
 # ── Add ~/.local/bin to PATH if needed ────────────────────────────────────────
 add_to_path() {
   local rc_file="$1"
-  local export_line='export PATH="$HOME/.local/bin:$PATH"'
+  local dir="$2"
+  local export_line="export PATH=\"${dir}:\$PATH\""
 
-  if [ -f "$rc_file" ] && grep -q '.local/bin' "$rc_file" 2>/dev/null; then
+  if [ -f "$rc_file" ] && grep -qF "$dir" "$rc_file" 2>/dev/null; then
     return 0  # already present
   fi
 
   printf '\n# Added by TheSecondBrain installer\n%s\n' "$export_line" >> "$rc_file"
-  success "Added ~/.local/bin to PATH in $rc_file"
+  success "Added $dir to PATH in $rc_file"
   return 1  # signal that we added it (needs reload)
 }
 
@@ -133,13 +134,13 @@ SHELL_NAME="$(basename "${SHELL:-/bin/sh}")"
 
 case "$SHELL_NAME" in
   zsh)
-    add_to_path "$HOME/.zshrc" || NEEDS_RELOAD=true
+    add_to_path "$HOME/.zshrc" "$INSTALL_DIR" || NEEDS_RELOAD=true
     ;;
   bash)
     if [ "$(uname -s)" = "Darwin" ]; then
-      add_to_path "$HOME/.bash_profile" || NEEDS_RELOAD=true
+      add_to_path "$HOME/.bash_profile" "$INSTALL_DIR" || NEEDS_RELOAD=true
     else
-      add_to_path "$HOME/.bashrc" || NEEDS_RELOAD=true
+      add_to_path "$HOME/.bashrc" "$INSTALL_DIR" || NEEDS_RELOAD=true
     fi
     ;;
   *)

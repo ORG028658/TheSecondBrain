@@ -44,7 +44,7 @@ jobs:
         run: |
           mkdir -p dist
           binary="brain-${GOOS}-${GOARCH}"
-          go build -ldflags="-s -w" -o "dist/${binary}" .
+          go build -ldflags="-s -w" -o "dist/${binary}" ./cmd/brain
           tar -C dist -czf "dist/${binary}.tar.gz" "${binary}"
 
       - name: Upload build artifact
