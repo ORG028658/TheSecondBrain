@@ -172,6 +172,11 @@ cp -r ~/code/my-android-app raw/
 # 2. Process (or files are auto-analyzed within 3 seconds of being dropped)
 /pull
 
+# Alternative: ingest an existing directory without copying files into raw/
+# brain reads from the project root itself — useful for codebases, mono-repos, etc.
+brain --current-dir      # session-level: all pulls use the project root as source
+/pull --current-dir      # one-shot: single pull from the project root
+
 # 3. Ask questions
 What design patterns does my-android-app use?
 
@@ -248,6 +253,7 @@ Every wiki page has:
 | Command | Description |
 |---------|-------------|
 | `/pull` | Full pipeline: scan `raw/` → extract knowledge → update `wiki/` → sync embeddings |
+| `/pull --current-dir` | Same as `/pull` but uses the project root as the source directory instead of `raw/` |
 | `/analyze` | Force re-analyze `raw/` (reprocess all files) |
 | `/sync` | Re-embed changed wiki pages (after manual edits) |
 | `/save <title>` | Save last answer as `wiki/synthesis/<slug>.md` |
