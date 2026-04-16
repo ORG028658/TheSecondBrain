@@ -55,7 +55,11 @@ func New(cfg *config.Config, w *wiki.Wiki) *Analyzer {
 // AnalyzeAll scans raw/ and processes new or changed files.
 // Each file may produce multiple wiki pages (source + entities + concepts).
 func (a *Analyzer) AnalyzeAll(ctx context.Context, progress func(string)) (string, error) {
-	rawPath := a.cfg.Paths.Raw
+	return a.AnalyzeFrom(ctx, a.cfg.Paths.Raw, progress)
+}
+
+// AnalyzeFrom is like AnalyzeAll but scans rawPath instead of the configured raw/ dir.
+func (a *Analyzer) AnalyzeFrom(ctx context.Context, rawPath string, progress func(string)) (string, error) {
 	progress(fmt.Sprintf("Scanning: %s", rawPath))
 
 	// Verify the raw directory exists

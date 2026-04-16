@@ -17,8 +17,10 @@ import (
 
 func main() {
 	// ── Flags ─────────────────────────────────────────────────────────────────
-	useCurrentDir := flag.Bool("current-dir", false,
+	var useCurrentDir bool
+	flag.BoolVar(&useCurrentDir, "current-dir", false,
 		"Use the project root as the raw source directory instead of raw/")
+	flag.BoolVar(&useCurrentDir, "cd", false, "Alias for --current-dir")
 	uninstall := flag.Bool("uninstall", false,
 		"Remove the brain binary and global config, then exit")
 	flag.Parse()
@@ -61,7 +63,7 @@ func main() {
 	}
 
 	// --current-dir: override the raw source path to the project root.
-	if *useCurrentDir {
+	if useCurrentDir {
 		cfg.Paths.Raw = projectPath
 	}
 

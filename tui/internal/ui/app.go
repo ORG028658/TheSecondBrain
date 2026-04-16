@@ -261,7 +261,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.state == stateIdle {
 			m.state = stateLoading
 			m.loadingOp = randomAnalyzingPhrase()
-			return m, tea.Batch(append(cmds, m.cmdPull(), m.spinner.Tick)...)
+			return m, tea.Batch(append(cmds, m.cmdPullFrom(m.cfg.Paths.Raw), m.spinner.Tick)...)
 		}
 
 	// ── keyboard ─────────────────────────────────────────────────────────────
@@ -468,7 +468,10 @@ func (m *Model) handleCommand(input string) tea.Cmd {
 	case "/pull":
 		m.state = stateLoading
 		m.loadingOp = randomAnalyzingPhrase()
-		return m.cmdPull()
+		if len(parts) > 1 && parts[1] == "-cd" {
+			return m.cmdPullFrom(m.cfg.ProjectPath)
+		}
+		return m.cmdPullFrom(m.cfg.Paths.Raw)
 	case "/save":
 		title := strings.TrimSpace(strings.TrimPrefix(input, "/save"))
 		if title == "" {
@@ -484,7 +487,10 @@ func (m *Model) handleCommand(input string) tea.Cmd {
 	case "/analyze":
 		m.state = stateLoading
 		m.loadingOp = randomAnalyzingPhrase()
-		return m.cmdAnalyze()
+		if len(parts) > 1 && parts[1] == "-cd" {
+			return m.cmdAnalyzeFrom(m.cfg.ProjectPath)
+		}
+		return m.cmdAnalyzeFrom(m.cfg.Paths.Raw)
 	case "/amendments":
 		return m.cmdAmendments()
 
@@ -676,12 +682,12 @@ func (m *Model) cmdStatus() tea.Cmd {
 	}
 }
 
-func (m *Model) cmdPull() tea.Cmd {
+func (m *Model) cmdPullFrom(rawDir string) tea.Cmd {
 	ch := make(chan string, 40)
 	go func() {
 		defer close(ch)
 		ctx := context.Background()
-		summary, err := m.analyzer.AnalyzeAll(ctx, func(s string) { ch <- s })
+		summary, err := m.analyzer.AnalyzeFrom(ctx, rawDir, func(s string) { ch <- s })
 		_ = m.store.Save()
 		if err != nil {
 			ch <- fmt.Sprintf("⚠ %v", err)
@@ -698,19 +704,19 @@ func (m *Model) cmdPull() tea.Cmd {
 		}
 		_ = m.store.Save()
 		// Re-watch any new subdirs added
-		rewatchSubdirs(m.watcher, m.cfg.Paths.Raw)
+		rewatchSubdirs(m.watcher, rawDir)
 		_, chunks := m.store.Stats()
 		ch <- "___DONE___:" + fmt.Sprintf("%s\nKnowledge base: %d chunks indexed", summary, chunks)
 	}()
 	return makeProgressListener(ch)
 }
 
-func (m *Model) cmdAnalyze() tea.Cmd {
+func (m *Model) cmdAnalyzeFrom(rawDir string) tea.Cmd {
 	ch := make(chan string, 20)
 	go func() {
 		defer close(ch)
 		ctx := context.Background()
-		summary, err := m.analyzer.AnalyzeAll(ctx, func(s string) { ch <- s })
+		summary, err := m.analyzer.AnalyzeFrom(ctx, rawDir, func(s string) { ch <- s })
 		_ = m.store.Save()
 		if err != nil {
 			ch <- fmt.Sprintf("⚠ %v", err)
