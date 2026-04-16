@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"os"
 
@@ -11,6 +12,21 @@ import (
 )
 
 func main() {
+	// ── Flags ─────────────────────────────────────────────────────────────────
+	// --current-dir: treat the project root as the raw source directory for this
+	// session. Equivalent to running /pull --current-dir on every pull. Files are
+	// ingested from their actual locations; the sources: frontmatter in wiki pages
+	// will reflect real paths (e.g. src/main.go) rather than raw/src/main.go.
+	//
+	// Useful when pointing the brain at an existing codebase or project directory
+	// without copying files into raw/ first.
+	//
+	// The /pull --current-dir TUI command applies the same override for a single
+	// pull operation without restarting the session.
+	useCurrentDir := flag.Bool("current-dir", false,
+		"Use the project root as the raw source directory instead of raw/")
+	flag.Parse()
+
 	// Project path = wherever brain was launched from.
 	// This is the working directory for all raw/, wiki/, knowledge-base/ operations.
 	projectPath, err := os.Getwd()
@@ -45,6 +61,13 @@ func main() {
 		fmt.Fprintf(os.Stderr, "\nError: %v\n\nFix: delete %s and re-run 'brain'.\n",
 			err, config.ConfigDir())
 		os.Exit(1)
+	}
+
+	// --current-dir: override the raw source path to the project root.
+	// The ingest pipeline will walk projectPath instead of projectPath/raw/.
+	// wiki/ and knowledge-base/ remain in their default locations.
+	if *useCurrentDir {
+		cfg.Paths.Raw = projectPath
 	}
 
 	model := ui.NewModel(cfg)
