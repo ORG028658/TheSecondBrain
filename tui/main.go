@@ -7,10 +7,7 @@ import (
 
 	"github.com/ORG028658/TheSecondBrain/tui/internal/config"
 	"github.com/ORG028658/TheSecondBrain/tui/internal/ui"
-<<<<<<< Updated upstream
-=======
 
->>>>>>> Stashed changes
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/joho/godotenv"
 )
