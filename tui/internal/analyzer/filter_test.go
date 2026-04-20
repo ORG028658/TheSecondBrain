@@ -5,6 +5,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/ORG028658/TheSecondBrain/tui/internal/config"
+	"github.com/ORG028658/TheSecondBrain/tui/internal/wiki"
 )
 
 // ── shouldAnalyzeFile ─────────────────────────────────────────────────────────
@@ -183,5 +186,46 @@ func TestSmartTruncate_NeverExceedsLimit(t *testing.T) {
 	// Allow for the truncation marker appended at the end
 	if len(got) > 80000+100 {
 		t.Errorf("truncated content too long: %d chars", len(got))
+	}
+}
+
+func TestShouldSkipManagedDir_WhenScanningProjectRoot(t *testing.T) {
+	project := t.TempDir()
+	cfg := &config.Config{
+		ProjectPath: project,
+		Paths: config.PathsConfig{
+			Raw:           filepath.Join(project, "raw"),
+			Wiki:          filepath.Join(project, "wiki"),
+			KnowledgeBase: filepath.Join(project, "knowledge-base"),
+		},
+	}
+	a := New(cfg, wiki.New(cfg.Paths.Wiki))
+
+	for _, dir := range []string{cfg.Paths.Raw, cfg.Paths.Wiki, cfg.Paths.KnowledgeBase} {
+		if !a.shouldSkipManagedDir(dir, project) {
+			t.Fatalf("expected %s to be skipped when scanning %s", dir, project)
+		}
+	}
+}
+
+func TestShouldSkipManagedDir_WhenScanningRawOnly(t *testing.T) {
+	project := t.TempDir()
+	cfg := &config.Config{
+		ProjectPath: project,
+		Paths: config.PathsConfig{
+			Raw:           filepath.Join(project, "raw"),
+			Wiki:          filepath.Join(project, "wiki"),
+			KnowledgeBase: filepath.Join(project, "knowledge-base"),
+		},
+	}
+	a := New(cfg, wiki.New(cfg.Paths.Wiki))
+
+	if a.shouldSkipManagedDir(cfg.Paths.Raw, cfg.Paths.Raw) {
+		t.Fatal("raw source root should not skip itself")
+	}
+	for _, dir := range []string{cfg.Paths.Wiki, cfg.Paths.KnowledgeBase} {
+		if !a.shouldSkipManagedDir(dir, cfg.Paths.Raw) {
+			t.Fatalf("expected %s to be skipped when scanning raw", dir)
+		}
 	}
 }

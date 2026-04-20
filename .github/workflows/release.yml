@@ -23,15 +23,12 @@ jobs:
             goarch: amd64
           - goos: darwin
             goarch: arm64
-    defaults:
-      run:
-        working-directory: tui
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v4.2.2
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v5.4.0
         with:
           go-version-file: tui/go.mod
           cache-dependency-path: tui/go.sum
@@ -42,10 +39,10 @@ jobs:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
         run: |
-          mkdir -p dist
+          mkdir -p tui/dist
           binary="brain-${GOOS}-${GOARCH}"
-          go build -ldflags="-s -w" -o "dist/${binary}" .
-          tar -C dist -czf "dist/${binary}.tar.gz" "${binary}"
+          go build -C tui -ldflags="-s -w" -o "dist/${binary}" ./cmd/brain
+          tar -C tui/dist -czf "tui/dist/${binary}.tar.gz" "${binary}"
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4

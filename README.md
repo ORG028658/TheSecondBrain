@@ -113,23 +113,48 @@ Feed the brain Slack threads, meeting transcripts, design docs, and customer cal
 
 ### Install
 
+**One command — no Git, no Go, no technical knowledge needed:**
+
 ```bash
-# Prerequisites: Go 1.22+
-go install github.com/ORG028658/TheSecondBrain/tui@latest
+curl -fsSL https://raw.githubusercontent.com/ORG028658/TheSecondBrain/main/install.sh | bash
 ```
 
-This installs the `brain` binary into your Go bin directory (`$GOBIN` or `$(go env GOPATH)/bin`).
+The script:
+- Detects your OS and chip automatically (macOS Intel / Apple Silicon, Linux x86 / ARM)
+- Downloads the pre-built binary from the latest GitHub release
+- Installs it to `~/.local/bin/brain` — no `sudo` required
+- Adds `~/.local/bin` to your shell PATH automatically
+- Tells you exactly what to run when it's done
 
-If that directory is not already on your `PATH`, add it:
+After the script finishes, run the command it prints (usually `source ~/.zshrc && brain`).
+
+**Verify the install worked:**
 
 ```bash
-export PATH="$(go env GOPATH)/bin:$PATH"
+which brain   # → /Users/<you>/.local/bin/brain
+brain
 ```
 
-For local development from a checked-out repo, you can still use:
+---
+
+### Uninstall
 
 ```bash
-bash install.sh
+brain --uninstall
+```
+
+Removes the binary and `~/.config/secondbrain/` (API key + settings).
+Your vault data (`raw/`, `wiki/`, `knowledge-base/`) is never touched.
+
+---
+
+**For developers — build from source:**
+
+```bash
+# Requires Go 1.22+
+git clone https://github.com/ORG028658/TheSecondBrain
+cd TheSecondBrain
+bash install.sh   # builds from source, installs to /usr/local/bin
 ```
 
 ### First Run
@@ -171,6 +196,11 @@ cp -r ~/code/my-android-app raw/
 
 # 2. Process (or files are auto-analyzed within 3 seconds of being dropped)
 /pull
+
+# Alternative: ingest an existing directory without copying files into raw/
+# brain reads from the project root itself — useful for codebases, mono-repos, etc.
+brain --current-dir      # session-level: all pulls use the project root as source
+/pull --current-dir      # one-shot: single pull from the project root
 
 # 3. Ask questions
 What design patterns does my-android-app use?
@@ -234,11 +264,12 @@ Every wiki page has:
 
 ### TUI
 - **Streaming output** — answers appear token by token
-- **Scroll** — `PgUp`/`PgDn` to scroll chat history; auto-follows new messages unless you've scrolled up
+- **Scroll** — `PgUp`/`PgDn` to scroll chat history; a scroll hint appears in the footer when not at the bottom (auto-follows otherwise)
 - **Command history** — `↑`/`↓` arrows to navigate previous inputs (like a shell)
 - **Clipboard** — `Ctrl+Y` copies the last answer
 - **Shell passthrough** — `!<command>` runs any shell command from the project directory (pipes, `&&`, `cd` all work)
 - **File-in-chat** — mention a file path (e.g. `/path/to/doc.md`) and it's automatically copied to `raw/` with an explanation
+- **Sidebar** — press `1`/`2`/`3` to switch between Chat, Commands, and Status panes
 - **Brain logo** with live stats in the header — wiki page count, KB chunk count, watcher indicator
 
 ---
@@ -248,7 +279,9 @@ Every wiki page has:
 | Command | Description |
 |---------|-------------|
 | `/pull` | Full pipeline: scan `raw/` → extract knowledge → update `wiki/` → sync embeddings |
+| `/pull --current-dir` | Same as `/pull` but uses the project root as the source directory instead of `raw/` |
 | `/analyze` | Force re-analyze `raw/` (reprocess all files) |
+| `/analyze --current-dir` | Same as `/analyze` but uses the project root instead of `raw/` |
 | `/sync` | Re-embed changed wiki pages (after manual edits) |
 | `/save <title>` | Save last answer as `wiki/synthesis/<slug>.md` |
 | `/fixwiki <name> <fix>` | Correct a wiki page by name or path |
@@ -274,6 +307,8 @@ Every wiki page has:
 | `PgUp` / `PgDn` | Scroll chat (stops auto-follow when scrolled up) |
 | `Ctrl+Y` | Copy last answer to clipboard |
 | `Ctrl+C` | Quit |
+| `Esc` | Cancel current operation (query, pull, analyze) or wiki confirmation |
+| `1` / `2` / `3` | Switch sidebar pane: Chat / Commands / Status (when input is empty) |
 | `confirm` | (in confirmation prompts) Apply a wiki correction |
 | `force` | (in confirmation prompts) Force-apply despite contradictions |
 

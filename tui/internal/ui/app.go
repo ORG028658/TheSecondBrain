@@ -76,6 +76,19 @@ const (
 	stateConfirming          // waiting for user to confirm a wiki update
 )
 
+// ── sidebar panes ─────────────────────────────────────────────────────────────
+
+type sidebarPane int
+
+const (
+	paneChat sidebarPane = iota
+	paneCommands
+	paneStatus
+)
+
+var paneLabels = []string{"  Chat", "  Commands", "  Status"}
+var paneKeys = []string{"1", "2", "3"}
+
 type chatMsg struct {
 	role    string
 	content string
@@ -104,7 +117,7 @@ type Model struct {
 	loadingOp string
 
 	streamingContent string // plain string — safe to copy (Builder panics when copied by value)
-	pendingRefs      []string
+	lastCopyText     string
 	lastAnswer       string
 	lastRefs         []string
 
@@ -115,6 +128,9 @@ type Model struct {
 	watcher         *fsnotify.Watcher
 	pendingAnalysis bool
 	atBottom        bool
+	activePane      sidebarPane
+
+	cancelOp context.CancelFunc // cancels the current pull/analyze/query; nil when idle
 
 	// conversation context (last N exchanges for follow-up awareness)
 	convHistory []rag.ConvMsg
@@ -122,6 +138,8 @@ type Model struct {
 	// wiki correction flow
 	pendingUpdate *wikiUpdateState
 }
+
+const messageBottomSafeGap = 5
 
 // wikiUpdateState holds a pending correction waiting for user confirmation.
 type wikiUpdateState struct {
@@ -232,18 +250,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
-		vpH := m.height - 3 // header(1) + divider(1) + footer(1)
-		if vpH < 4 {
-			vpH = 4
-		}
-		if !m.ready {
-			m.viewport = viewport.New(m.width, vpH)
-			m.viewport.SetContent(m.renderMessages())
-			m.ready = true
-		} else {
-			m.viewport.Width = m.width
-			m.viewport.Height = vpH
-		}
+		m.syncViewportLayout()
 
 	// ── file watcher ─────────────────────────────────────────────────────────
 	case rawFileChangedMsg:
@@ -252,7 +259,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if !m.pendingAnalysis && m.state == stateIdle {
 			m.pendingAnalysis = true
-			m.addMsg("system", "New files detected in raw/ — auto-analyzing in 3 seconds…")
+			m.addMsg("system", fmt.Sprintf("New files detected in %s — auto-analyzing in 3 seconds…", m.cfg.Paths.Raw))
 			cmds = append(cmds, deferred(3*time.Second, autoAnalyzeMsg{}))
 		}
 
@@ -261,7 +268,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.state == stateIdle {
 			m.state = stateLoading
 			m.loadingOp = randomAnalyzingPhrase()
-			return m, tea.Batch(append(cmds, m.cmdPull(), m.spinner.Tick)...)
+			return m, tea.Batch(append(cmds, m.cmdPullFrom(m.cfg.Paths.Raw), m.spinner.Tick)...)
 		}
 
 	// ── keyboard ─────────────────────────────────────────────────────────────
@@ -273,10 +280,40 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, tea.Quit
 
+		case msg.Type == tea.KeyEsc:
+			switch m.state {
+			case stateLoading, stateStreaming:
+				if m.cancelOp != nil {
+					m.cancelOp()
+					m.cancelOp = nil
+				}
+				m.addMsg("system", "Cancelled: "+m.loadingOp)
+				m.state = stateIdle
+			case stateConfirming:
+				m.pendingUpdate = nil
+				m.state = stateIdle
+				m.addMsg("system", "Cancelled.")
+			}
+
+		// ── sidebar pane switching (only when not composing) ─────────────────
+		case msg.Type == tea.KeyRunes && m.state == stateIdle && m.textInput.Value() == "":
+			switch string(msg.Runes) {
+			case "1":
+				m.activePane = paneChat
+				m.atBottom = true
+			case "2":
+				m.activePane = paneCommands
+			case "3":
+				m.activePane = paneStatus
+			}
+
 		case msg.Type == tea.KeyCtrlY:
-			if m.lastAnswer != "" {
-				clipboard.WriteAll(m.lastAnswer) //nolint:errcheck
-				m.addMsg("system", "Copied to clipboard")
+			if m.lastCopyText != "" {
+				if err := clipboard.WriteAll(m.lastCopyText); err != nil {
+					m.addMsg("error", fmt.Sprintf("copy failed: %v", err))
+				} else {
+					m.addMsg("system", "Copied to clipboard")
+				}
 			}
 
 		case msg.Type == tea.KeyUp && m.state == stateIdle:
@@ -350,7 +387,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, tea.Batch(m.handleCommand(input), m.spinner.Tick)
 			default:
 				// Track user turn in conversation history
-				m.convHistory = append(m.convHistory, rag.ConvMsg{Role: "user", Content: input})
+				m.convHistory = appendConvHistory(m.convHistory, rag.ConvMsg{Role: "user", Content: input})
 				return m, tea.Batch(m.handleQuery(input), m.spinner.Tick)
 			}
 		}
@@ -400,6 +437,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.addMsg("error", formatError(msg.err))
 		} else {
 			m.addMsg("brain", msg.content)
+			m.lastCopyText = msg.content
 			if len(msg.refs) > 0 {
 				m.lastAnswer = msg.content
 				m.lastRefs = msg.refs
@@ -415,6 +453,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case streamDoneMsg:
 		m.state = stateIdle
+		if m.cancelOp != nil {
+			m.cancelOp()
+			m.cancelOp = nil
+		}
 		answer := m.streamingContent
 		m.streamingContent = ""
 		if len(msg.refs) > 0 {
@@ -426,9 +468,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.lastAnswer = answer
 			m.lastRefs = msg.refs
 		}
+		m.lastCopyText = answer
 		m.addMsg("brain", answer+"\n"+systemMsgStyle.Render("  → /save <title>  to keep this"))
 		// Store in conversation history for follow-up awareness
-		m.convHistory = append(m.convHistory, rag.ConvMsg{Role: "assistant", Content: answer})
+		m.convHistory = appendConvHistory(m.convHistory, rag.ConvMsg{Role: "assistant", Content: answer})
 
 	case spinner.TickMsg:
 		if m.state == stateLoading || m.state == stateStreaming {
@@ -439,11 +482,14 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	var cmd tea.Cmd
-	m.textInput, cmd = m.textInput.Update(msg)
-	cmds = append(cmds, cmd)
+	if _, isMouse := msg.(tea.MouseMsg); !isMouse {
+		m.textInput, cmd = m.textInput.Update(msg)
+		cmds = append(cmds, cmd)
+	}
+	m.syncViewportLayout()
 	m.viewport, cmd = m.viewport.Update(msg)
 	cmds = append(cmds, cmd)
-	m.viewport.SetContent(m.renderMessages())
+	m.viewport.SetContent(m.renderPaneContent())
 	if manualViewportScroll {
 		m.atBottom = m.viewport.AtBottom()
 	}
@@ -468,7 +514,7 @@ func (m *Model) handleCommand(input string) tea.Cmd {
 	case "/pull":
 		m.state = stateLoading
 		m.loadingOp = randomAnalyzingPhrase()
-		return m.cmdPull()
+		return m.cmdPullFrom(resolveSourceDir(parts[1:], m.cfg.ProjectPath, m.cfg.Paths.Raw))
 	case "/save":
 		title := strings.TrimSpace(strings.TrimPrefix(input, "/save"))
 		if title == "" {
@@ -484,7 +530,7 @@ func (m *Model) handleCommand(input string) tea.Cmd {
 	case "/analyze":
 		m.state = stateLoading
 		m.loadingOp = randomAnalyzingPhrase()
-		return m.cmdAnalyze()
+		return m.cmdAnalyzeFrom(resolveSourceDir(parts[1:], m.cfg.ProjectPath, m.cfg.Paths.Raw))
 	case "/amendments":
 		return m.cmdAmendments()
 
@@ -561,8 +607,10 @@ func (m *Model) handleQuery(question string) tea.Cmd {
 
 	m.state = stateStreaming
 	m.loadingOp = randomThinkingPhrase()
+	ctx, cancel := context.WithCancel(context.Background())
+	m.cancelOp = cancel
 	return func() tea.Msg {
-		ch := m.rag.QueryStream(context.Background(), question, history)
+		ch := m.rag.QueryStream(ctx, question, history)
 		return makeStreamListener(ch)()
 	}
 }
@@ -676,12 +724,14 @@ func (m *Model) cmdStatus() tea.Cmd {
 	}
 }
 
-func (m *Model) cmdPull() tea.Cmd {
+func (m *Model) cmdPullFrom(rawDir string) tea.Cmd {
+	ctx, cancel := context.WithCancel(context.Background())
+	m.cancelOp = cancel
 	ch := make(chan string, 40)
 	go func() {
 		defer close(ch)
-		ctx := context.Background()
-		summary, err := m.analyzer.AnalyzeAll(ctx, func(s string) { ch <- s })
+		defer cancel()
+		summary, err := m.analyzer.AnalyzeFrom(ctx, rawDir, func(s string) { ch <- s })
 		_ = m.store.Save()
 		if err != nil {
 			ch <- fmt.Sprintf("⚠ %v", err)
@@ -698,19 +748,21 @@ func (m *Model) cmdPull() tea.Cmd {
 		}
 		_ = m.store.Save()
 		// Re-watch any new subdirs added
-		rewatchSubdirs(m.watcher, m.cfg.Paths.Raw)
+		rewatchSubdirs(m.watcher, rawDir)
 		_, chunks := m.store.Stats()
 		ch <- "___DONE___:" + fmt.Sprintf("%s\nKnowledge base: %d chunks indexed", summary, chunks)
 	}()
 	return makeProgressListener(ch)
 }
 
-func (m *Model) cmdAnalyze() tea.Cmd {
+func (m *Model) cmdAnalyzeFrom(rawDir string) tea.Cmd {
+	ctx, cancel := context.WithCancel(context.Background())
+	m.cancelOp = cancel
 	ch := make(chan string, 20)
 	go func() {
 		defer close(ch)
-		ctx := context.Background()
-		summary, err := m.analyzer.AnalyzeAll(ctx, func(s string) { ch <- s })
+		defer cancel()
+		summary, err := m.analyzer.AnalyzeFrom(ctx, rawDir, func(s string) { ch <- s })
 		_ = m.store.Save()
 		if err != nil {
 			ch <- fmt.Sprintf("⚠ %v", err)
@@ -1052,45 +1104,133 @@ func (m *Model) View() string {
 		return "Loading...\n"
 	}
 	header := m.renderHeader()
+	body := m.renderBody()
+	footer := m.renderFooter()
+	return lipgloss.JoinVertical(lipgloss.Left, header, body, footer)
+}
+
+func (m *Model) renderHeader() string {
+	left := headerStyle.Render("  🧠  TheSecondBrain  ")
+	_, chunks := m.store.Stats()
+	watchDot := ""
+	if m.watcher != nil {
+		watchDot = "  ◉"
+	}
+	right := headerStatStyle.Render(fmt.Sprintf(
+		"  ◈ wiki:%d   ◈ kb:%d%s  ",
+		m.wiki.PageCount(), chunks, watchDot))
+	gap := strings.Repeat(" ", maxInt(0, m.width-lipgloss.Width(left)-lipgloss.Width(right)))
+	bg := lipgloss.NewStyle().Background(colorGreen).Render(gap)
+	return lipgloss.JoinHorizontal(lipgloss.Top, left, bg, right)
+}
+
+// renderBody builds the sidebar + main content area side by side.
+func (m *Model) renderBody() string {
+	sidebar := m.renderSidebar(m.viewport.Height)
 	content := m.viewport.View()
-	divider := dividerStyle.Render(strings.Repeat("─", m.width))
-	var footer string
+	return lipgloss.JoinHorizontal(lipgloss.Top, sidebar, content)
+}
+
+// renderSidebar renders the navigation panel at an exact height so it aligns
+// with the viewport without gaps.
+func (m *Model) renderSidebar(height int) string {
+	var sb strings.Builder
+
+	sb.WriteString(sidebarTitleStyle.Render("NAVIGATION") + "\n\n")
+
+	for i, label := range paneLabels {
+		prefix := "  "
+		if sidebarPane(i) == m.activePane {
+			sb.WriteString(sidebarActiveStyle.Render("▶ "+strings.TrimSpace(label)) + "\n")
+		} else {
+			sb.WriteString(sidebarItemStyle.Render(prefix+strings.TrimSpace(label)) + "\n")
+		}
+	}
+
+	sb.WriteString("\n" + sidebarStatStyle.Render("1/2/3 switch pane") + "\n")
+
+	// Fill remaining lines so the border stretches full height.
+	rendered := sb.String()
+	usedLines := strings.Count(rendered, "\n")
+	for i := usedLines; i < height-1; i++ {
+		rendered += "\n"
+	}
+
+	return sidebarStyle.Height(height).Render(rendered)
+}
+
+func (m *Model) renderFooter() string {
+	var inner string
 	switch m.state {
-	case stateLoading:
-		footer = spinnerStyle.Render(m.spinner.View()) + " " + systemMsgStyle.Render(m.loadingOp)
-	case stateStreaming:
-		footer = spinnerStyle.Render(m.spinner.View()) + " " + systemMsgStyle.Render(m.loadingOp)
+	case stateLoading, stateStreaming:
+		inner = spinnerStyle.Render(m.spinner.View()) + " " + systemMsgStyle.Render(m.loadingOp)
 	case stateConfirming:
 		warning := ""
 		if m.pendingUpdate != nil && !m.pendingUpdate.isConsistent {
 			warning = errorMsgStyle.Render("⚠ contradicts source  ") + "  "
 		}
-		footer = warning + userLabelStyle.Render("confirm") + helpStyle.Render(" · ") +
+		inner = warning + userLabelStyle.Render("confirm") + helpStyle.Render(" · ") +
 			errorMsgStyle.Render("force") + helpStyle.Render(" (override) · cancel  > ") + m.textInput.View()
 	default:
-		footer = inputPromptStyle.Render("> ") + m.textInput.View() +
-			"   " + helpStyle.Render("↑↓ history · wheel scroll · ctrl+y copy")
+		scrollHint := ""
+		if !m.atBottom {
+			scrollHint = "   " + helpStyle.Render("↑ scrolled — PgDn to return")
+		}
+		inner = inputPromptStyle.Render("> ") + m.textInput.View() +
+			"   " + helpStyle.Render("↑↓ history · pgup/pgdn scroll · ctrl+y copy · 1/2/3 panes") + scrollHint
 	}
-	return lipgloss.JoinVertical(lipgloss.Left, header, content, divider, footer)
+
+	// Full-width divider line above the input row.
+	divider := dividerStyle.Render(strings.Repeat("─", maxInt(0, m.width)))
+	return divider + "\n" + inner
 }
 
-func (m *Model) renderHeader() string {
-	// Left: brain icon + name
-	left := headerStyle.Render("  🧠  TheSecondBrain  ")
-
-	// Right: neuro-node stats + watch indicator
-	_, chunks := m.store.Stats()
-	watchDot := ""
-	if m.watcher != nil {
-		watchDot = "  ◉" // active watcher indicator
+func (m *Model) syncViewportLayout() {
+	if m.width <= 0 || m.height <= 0 {
+		return
 	}
-	right := headerStatStyle.Render(fmt.Sprintf(
-		"  ◈ wiki:%d   ◈ kb:%d%s  ",
-		m.wiki.PageCount(), chunks, watchDot))
 
-	gap := strings.Repeat(" ", maxInt(0, m.width-lipgloss.Width(left)-lipgloss.Width(right)))
-	bg := lipgloss.NewStyle().Background(colorGreen).Render(gap)
-	return lipgloss.JoinHorizontal(lipgloss.Top, left, bg, right)
+	vpW := maxInt(4, m.width-sidebarOuterWidth)
+	vpH := m.availableViewportHeight()
+
+	if !m.ready {
+		m.viewport = viewport.New(vpW, vpH)
+		m.viewport.SetContent(m.renderPaneContent())
+		m.ready = true
+		return
+	}
+
+	m.viewport.Width = vpW
+	m.viewport.Height = vpH
+}
+
+func (m *Model) availableViewportHeight() int {
+	chromeHeight := m.measureWrappedHeight(m.renderHeader()) +
+		m.measureWrappedHeight(m.renderFooter())
+	vpH := m.height - chromeHeight
+	if vpH < 4 {
+		return 4
+	}
+	return vpH
+}
+
+func (m *Model) measureWrappedHeight(s string) int {
+	if m.width <= 0 {
+		return lipgloss.Height(s)
+	}
+	return lipgloss.Height(lipgloss.NewStyle().Width(m.width).Render(s))
+}
+
+// renderPaneContent routes to the correct content renderer based on activePane.
+func (m *Model) renderPaneContent() string {
+	switch m.activePane {
+	case paneCommands:
+		return m.renderCommandsPane()
+	case paneStatus:
+		return m.renderStatusPane()
+	default:
+		return m.renderMessages()
+	}
 }
 
 func (m *Model) renderMessages() string {
@@ -1103,6 +1243,7 @@ func (m *Model) renderMessages() string {
 		ts := systemMsgStyle.Render(time.Now().Format("15:04"))
 		sb.WriteString(fmt.Sprintf("%s %s\n%s\n", ts, brainLabelStyle.Render("Brain"), m.streamingContent))
 	}
+	sb.WriteString(strings.Repeat("\n", messageBottomSafeGap))
 	return sb.String()
 }
 
@@ -1125,6 +1266,44 @@ func (m *Model) renderMsg(msg chatMsg) string {
 	default:
 		return systemMsgStyle.Render("   " + msg.content)
 	}
+}
+
+// renderCommandsPane shows the full command reference in the main area.
+func (m *Model) renderCommandsPane() string {
+	return helpText() + strings.Repeat("\n", messageBottomSafeGap)
+}
+
+// renderStatusPane shows live vault stats in the main area.
+func (m *Model) renderStatusPane() string {
+	pages := m.wiki.PageCount()
+	_, chunks := m.store.Stats()
+	rawCount := countFiles(m.cfg.Paths.Raw)
+	watching := "off"
+	if m.watcher != nil {
+		watching = "on"
+	}
+	rawStatus := "✓"
+	if _, err := os.Stat(m.cfg.Paths.Raw); err != nil {
+		rawStatus = "✗ missing"
+	}
+	return fmt.Sprintf(
+		"%s\n\n"+
+			"Project dir : %s\n"+
+			"raw/        : %s  [%s]  %d files\n"+
+			"wiki/       : %s\n\n"+
+			"Wiki pages  : %d\n"+
+			"KB chunks   : %d\n"+
+			"Auto-watch  : %s\n\n"+
+			"Config dir  : %s\n"+
+			"API key     : %s",
+		sidebarTitleStyle.Render("VAULT STATUS"),
+		m.cfg.ProjectPath,
+		m.cfg.Paths.Raw, rawStatus, rawCount,
+		m.cfg.Paths.Wiki,
+		pages, chunks, watching,
+		config.ConfigDir(),
+		maskKey(os.Getenv("LLM_COMPATIBLE_API_KEY")),
+	) + strings.Repeat("\n", messageBottomSafeGap)
 }
 
 // ── file watcher ──────────────────────────────────────────────────────────────
@@ -1301,6 +1480,38 @@ func detectNestedWikiRoot(wikiRoot string) string {
 	return ""
 }
 
+// resolvePath expands ~ to the home directory and makes the path absolute.
+func resolvePath(p string) string {
+	if strings.HasPrefix(p, "~/") {
+		if home, err := os.UserHomeDir(); err == nil {
+			p = filepath.Join(home, p[2:])
+		}
+	}
+	if abs, err := filepath.Abs(p); err == nil {
+		return abs
+	}
+	return p
+}
+
+func resolveSourceDir(args []string, projectPath, defaultPath string) string {
+	if len(args) == 0 {
+		return defaultPath
+	}
+	if isCurrentDirArg(args[0]) {
+		return projectPath
+	}
+	return resolvePath(args[0])
+}
+
+func isCurrentDirArg(arg string) bool {
+	switch arg {
+	case "-cd", "--cd", "--current-dir":
+		return true
+	default:
+		return false
+	}
+}
+
 func slugify(s string) string {
 	s = strings.ToLower(s)
 	var b strings.Builder
@@ -1396,6 +1607,17 @@ created: %s
 
 	rel, _ := filepath.Rel(filepath.Dir(kbPath), fullPath)
 	return rel
+}
+
+const maxConvHistory = 40
+
+// appendConvHistory appends a message and trims to maxConvHistory entries.
+func appendConvHistory(h []rag.ConvMsg, msg rag.ConvMsg) []rag.ConvMsg {
+	h = append(h, msg)
+	if len(h) > maxConvHistory {
+		h = h[len(h)-maxConvHistory:]
+	}
+	return h
 }
 
 // recentHistory returns the last n conversation turns for follow-up context.
@@ -1511,10 +1733,12 @@ func tipsMessage(rawPath string) string {
      Example: !ls raw/
 
   Shortcuts:
-    ↑ ↓       navigate command history
-    Mouse wheel  scroll chat
-    Ctrl+Y    copy last answer to clipboard
-    Ctrl+C    quit
+    ↑ ↓          navigate command history
+    PgUp / PgDn  scroll chat (footer shows hint when scrolled up)
+    Ctrl+Y       copy last answer to clipboard
+    Esc          cancel current operation
+    1 / 2 / 3    switch pane: Chat / Commands / Status
+    Ctrl+C       quit
 
   Type /tips to see this again anytime.`, rawPath)
 }
@@ -1523,9 +1747,11 @@ func helpText() string {
 	return `Commands:
 
   /pull             Scan raw/ → extract knowledge → wiki + knowledge-base
+  /pull --current-dir  Scan the project root instead of raw/
   /save <title>     Save last answer as wiki/synthesis/<slug>.md
   /sync             Re-embed changed wiki pages (after manual edits)
   /analyze          Force re-analyze raw/ (reprocess all files)
+  /analyze --current-dir  Re-analyze the project root instead of raw/
   /gap <topic>      Flag a missing topic — creates a research stub in wiki/sources/
   /fixwiki <name> <fix>  Correct a wiki page by name or path
                          Example: /fixwiki transformer activation should be ReLU not sigmoid
@@ -1546,7 +1772,9 @@ func helpText() string {
 
 Keyboard:
   ↑ / ↓        Navigate command history
-  Mouse wheel  Scroll chat
+  PgUp / PgDn  Scroll chat (footer shows hint when scrolled up)
   Ctrl+Y       Copy last answer to clipboard
+  Esc          Cancel current operation
+  1 / 2 / 3    Switch pane: Chat / Commands / Status (when input is empty)
   Ctrl+C       Quit`
 }

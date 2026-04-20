@@ -55,7 +55,11 @@ func New(cfg *config.Config, w *wiki.Wiki) *Analyzer {
 // AnalyzeAll scans raw/ and processes new or changed files.
 // Each file may produce multiple wiki pages (source + entities + concepts).
 func (a *Analyzer) AnalyzeAll(ctx context.Context, progress func(string)) (string, error) {
-	rawPath := a.cfg.Paths.Raw
+	return a.AnalyzeFrom(ctx, a.cfg.Paths.Raw, progress)
+}
+
+// AnalyzeFrom is like AnalyzeAll but scans rawPath instead of the configured raw/ dir.
+func (a *Analyzer) AnalyzeFrom(ctx context.Context, rawPath string, progress func(string)) (string, error) {
 	progress(fmt.Sprintf("Scanning: %s", rawPath))
 
 	// Verify the raw directory exists
@@ -79,6 +83,9 @@ func (a *Analyzer) AnalyzeAll(ctx context.Context, progress func(string)) (strin
 			if autoIgnoredDirs[d.Name()] {
 				return filepath.SkipDir
 			}
+			if a.shouldSkipManagedDir(path, rawPath) {
+				return filepath.SkipDir
+			}
 			rel, _ := filepath.Rel(rawPath, path)
 			if rel != "." && matchesIgnorePattern(rel+"/", ignorePatterns) {
 				return filepath.SkipDir
@@ -89,7 +96,7 @@ func (a *Analyzer) AnalyzeAll(ctx context.Context, progress func(string)) (strin
 			return nil
 		}
 
-		rel, _ := filepath.Rel(a.cfg.Paths.Raw, path)
+		rel, _ := filepath.Rel(rawPath, path)
 
 		if !shouldAnalyzeFile(path) {
 			return nil
@@ -146,6 +153,22 @@ func (a *Analyzer) AnalyzeAll(ctx context.Context, progress func(string)) (strin
 	a.rebuildIndex()
 
 	return fmt.Sprintf("Done — %d created, %d updated, %d skipped", created, updated, skipped), err
+}
+
+func (a *Analyzer) shouldSkipManagedDir(path, sourceRoot string) bool {
+	path = filepath.Clean(path)
+	sourceRoot = filepath.Clean(sourceRoot)
+
+	for _, managed := range []string{a.cfg.Paths.Raw, a.cfg.Paths.Wiki, a.cfg.Paths.KnowledgeBase} {
+		managed = filepath.Clean(managed)
+		if managed == sourceRoot {
+			continue
+		}
+		if path == managed {
+			return true
+		}
+	}
+	return false
 }
 
 // LintWiki asks the LLM to health-check the wiki.
