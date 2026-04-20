@@ -148,8 +148,8 @@ jobs:
           ```bash
           git clone https://github.com/${{ github.repository }}
           cd TheSecondBrain/tui
-          go build -o brain .
-          sudo mv brain /usr/local/bin/brain
+          go build -o dist/brain ./cmd/brain
+          sudo mv dist/brain /usr/local/bin/brain
           ```
 
           ---

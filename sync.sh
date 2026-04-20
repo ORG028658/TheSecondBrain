@@ -35,4 +35,5 @@ if [ "$found" -eq 0 ]; then
 fi
 
 echo ""
-echo "Done. Run /analyze in the TUI to update the wiki from changed files."
+echo "Done. Run /pull in the TUI to update the wiki from changed files."
+echo "      (or /pull --current-dir if you launched brain from the project root)"

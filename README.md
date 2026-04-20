@@ -264,11 +264,12 @@ Every wiki page has:
 
 ### TUI
 - **Streaming output** — answers appear token by token
-- **Scroll** — `PgUp`/`PgDn` to scroll chat history; auto-follows new messages unless you've scrolled up
+- **Scroll** — `PgUp`/`PgDn` to scroll chat history; a scroll hint appears in the footer when not at the bottom (auto-follows otherwise)
 - **Command history** — `↑`/`↓` arrows to navigate previous inputs (like a shell)
 - **Clipboard** — `Ctrl+Y` copies the last answer
 - **Shell passthrough** — `!<command>` runs any shell command from the project directory (pipes, `&&`, `cd` all work)
 - **File-in-chat** — mention a file path (e.g. `/path/to/doc.md`) and it's automatically copied to `raw/` with an explanation
+- **Sidebar** — press `1`/`2`/`3` to switch between Chat, Commands, and Status panes
 - **Brain logo** with live stats in the header — wiki page count, KB chunk count, watcher indicator
 
 ---
@@ -280,6 +281,7 @@ Every wiki page has:
 | `/pull` | Full pipeline: scan `raw/` → extract knowledge → update `wiki/` → sync embeddings |
 | `/pull --current-dir` | Same as `/pull` but uses the project root as the source directory instead of `raw/` |
 | `/analyze` | Force re-analyze `raw/` (reprocess all files) |
+| `/analyze --current-dir` | Same as `/analyze` but uses the project root instead of `raw/` |
 | `/sync` | Re-embed changed wiki pages (after manual edits) |
 | `/save <title>` | Save last answer as `wiki/synthesis/<slug>.md` |
 | `/fixwiki <name> <fix>` | Correct a wiki page by name or path |
@@ -305,6 +307,8 @@ Every wiki page has:
 | `PgUp` / `PgDn` | Scroll chat (stops auto-follow when scrolled up) |
 | `Ctrl+Y` | Copy last answer to clipboard |
 | `Ctrl+C` | Quit |
+| `Esc` | Cancel current operation (query, pull, analyze) or wiki confirmation |
+| `1` / `2` / `3` | Switch sidebar pane: Chat / Commands / Status (when input is empty) |
 | `confirm` | (in confirmation prompts) Apply a wiki correction |
 | `force` | (in confirmation prompts) Force-apply despite contradictions |
 

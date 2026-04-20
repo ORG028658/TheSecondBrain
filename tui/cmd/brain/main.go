@@ -41,7 +41,7 @@ func main() {
 	godotenv.Load(config.EnvPath()) //nolint:errcheck
 
 	if config.IsFirstRun() {
-		p := tea.NewProgram(ui.NewSetupModel(projectPath), tea.WithAltScreen())
+		p := tea.NewProgram(ui.NewSetupModel(projectPath))
 		result, err := p.Run()
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "Setup failed:", err)
@@ -68,7 +68,7 @@ func main() {
 	}
 
 	model := ui.NewModel(cfg)
-	p := tea.NewProgram(model, tea.WithAltScreen(), tea.WithMouseCellMotion())
+	p := tea.NewProgram(model)
 	if _, err := p.Run(); err != nil {
 		fmt.Fprintln(os.Stderr, "Error:", err)
 		os.Exit(1)
