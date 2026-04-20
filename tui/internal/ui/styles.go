@@ -2,6 +2,10 @@ package ui
 
 import "github.com/charmbracelet/lipgloss"
 
+// sidebarOuterWidth is the total terminal columns consumed by the sidebar
+// (content width + left padding + right border).
+const sidebarOuterWidth = 22
+
 var (
 	colorGreen  = lipgloss.Color("#25A065")
 	colorPurple = lipgloss.Color("#7D56F4")
@@ -10,6 +14,8 @@ var (
 	colorRed    = lipgloss.Color("#E06C75")
 	colorWhite  = lipgloss.Color("#FFFDF5")
 	colorDim    = lipgloss.Color("#4A4A4A")
+
+	// ── header ────────────────────────────────────────────────────────────────
 
 	headerStyle = lipgloss.NewStyle().
 			Background(colorGreen).
@@ -21,6 +27,32 @@ var (
 			Background(colorGreen).
 			Foreground(lipgloss.Color("#D4F0E4")).
 			Padding(0, 2)
+
+	// ── sidebar ───────────────────────────────────────────────────────────────
+	// Width(21) fills 21 cols; the right border adds the 22nd → sidebarOuterWidth.
+
+	sidebarStyle = lipgloss.NewStyle().
+			Width(sidebarOuterWidth - 1).
+			PaddingLeft(1).
+			Border(lipgloss.NormalBorder(), false, true, false, false).
+			BorderForeground(colorDim)
+
+	sidebarTitleStyle = lipgloss.NewStyle().
+				Foreground(colorGreen).
+				Bold(true)
+
+	sidebarActiveStyle = lipgloss.NewStyle().
+				Foreground(colorGreen).
+				Bold(true)
+
+	sidebarItemStyle = lipgloss.NewStyle().
+				Foreground(colorGray)
+
+	sidebarStatStyle = lipgloss.NewStyle().
+				Foreground(colorDim).
+				Italic(true)
+
+	// ── chat & messages ───────────────────────────────────────────────────────
 
 	userLabelStyle = lipgloss.NewStyle().
 			Foreground(colorPurple).
