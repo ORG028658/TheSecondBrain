@@ -72,3 +72,27 @@ func TestDetectNestedWikiRootIgnoresEmptyOrNonMarkdownNestedDir(t *testing.T) {
 		t.Fatalf("expected no nested warning, got %q", got)
 	}
 }
+
+func TestResolveSourceDirSupportsCurrentDirFlags(t *testing.T) {
+	project := "/tmp/project"
+	raw := "/tmp/project/raw"
+
+	for _, arg := range []string{"-cd", "--cd", "--current-dir"} {
+		if got := resolveSourceDir([]string{arg}, project, raw); got != project {
+			t.Fatalf("resolveSourceDir(%q) = %q, want %q", arg, got, project)
+		}
+	}
+}
+
+func TestResolveSourceDirFallsBackToDefaultOrExplicitPath(t *testing.T) {
+	project := "/tmp/project"
+	raw := "/tmp/project/raw"
+
+	if got := resolveSourceDir(nil, project, raw); got != raw {
+		t.Fatalf("resolveSourceDir(nil) = %q, want %q", got, raw)
+	}
+
+	if got := resolveSourceDir([]string{"docs"}, project, raw); !filepath.IsAbs(got) {
+		t.Fatalf("resolveSourceDir explicit path should be absolute, got %q", got)
+	}
+}

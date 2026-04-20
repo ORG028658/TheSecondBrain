@@ -83,6 +83,9 @@ func (a *Analyzer) AnalyzeFrom(ctx context.Context, rawPath string, progress fun
 			if autoIgnoredDirs[d.Name()] {
 				return filepath.SkipDir
 			}
+			if a.shouldSkipManagedDir(path, rawPath) {
+				return filepath.SkipDir
+			}
 			rel, _ := filepath.Rel(rawPath, path)
 			if rel != "." && matchesIgnorePattern(rel+"/", ignorePatterns) {
 				return filepath.SkipDir
@@ -93,7 +96,7 @@ func (a *Analyzer) AnalyzeFrom(ctx context.Context, rawPath string, progress fun
 			return nil
 		}
 
-		rel, _ := filepath.Rel(a.cfg.Paths.Raw, path)
+		rel, _ := filepath.Rel(rawPath, path)
 
 		if !shouldAnalyzeFile(path) {
 			return nil
@@ -150,6 +153,22 @@ func (a *Analyzer) AnalyzeFrom(ctx context.Context, rawPath string, progress fun
 	a.rebuildIndex()
 
 	return fmt.Sprintf("Done — %d created, %d updated, %d skipped", created, updated, skipped), err
+}
+
+func (a *Analyzer) shouldSkipManagedDir(path, sourceRoot string) bool {
+	path = filepath.Clean(path)
+	sourceRoot = filepath.Clean(sourceRoot)
+
+	for _, managed := range []string{a.cfg.Paths.Raw, a.cfg.Paths.Wiki, a.cfg.Paths.KnowledgeBase} {
+		managed = filepath.Clean(managed)
+		if managed == sourceRoot {
+			continue
+		}
+		if path == managed {
+			return true
+		}
+	}
+	return false
 }
 
 // LintWiki asks the LLM to health-check the wiki.

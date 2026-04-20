@@ -116,6 +116,8 @@ type Model struct {
 	pendingAnalysis bool
 	atBottom        bool
 
+	cancelOp context.CancelFunc // cancels the current pull/analyze/query; nil when idle
+
 	// conversation context (last N exchanges for follow-up awareness)
 	convHistory []rag.ConvMsg
 
@@ -272,6 +274,14 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.watcher.Close()
 			}
 			return m, tea.Quit
+
+		case msg.Type == tea.KeyEsc:
+			if (m.state == stateLoading || m.state == stateStreaming) && m.cancelOp != nil {
+				m.cancelOp()
+				m.cancelOp = nil
+				m.state = stateIdle
+				m.addMsg("system", "Cancelled.")
+			}
 
 		case msg.Type == tea.KeyCtrlY:
 			if m.lastAnswer != "" {
@@ -468,10 +478,7 @@ func (m *Model) handleCommand(input string) tea.Cmd {
 	case "/pull":
 		m.state = stateLoading
 		m.loadingOp = randomAnalyzingPhrase()
-		if len(parts) > 1 && parts[1] == "-cd" {
-			return m.cmdPullFrom(m.cfg.ProjectPath)
-		}
-		return m.cmdPullFrom(m.cfg.Paths.Raw)
+		return m.cmdPullFrom(resolveSourceDir(parts[1:], m.cfg.ProjectPath, m.cfg.Paths.Raw))
 	case "/save":
 		title := strings.TrimSpace(strings.TrimPrefix(input, "/save"))
 		if title == "" {
@@ -487,10 +494,7 @@ func (m *Model) handleCommand(input string) tea.Cmd {
 	case "/analyze":
 		m.state = stateLoading
 		m.loadingOp = randomAnalyzingPhrase()
-		if len(parts) > 1 && parts[1] == "-cd" {
-			return m.cmdAnalyzeFrom(m.cfg.ProjectPath)
-		}
-		return m.cmdAnalyzeFrom(m.cfg.Paths.Raw)
+		return m.cmdAnalyzeFrom(resolveSourceDir(parts[1:], m.cfg.ProjectPath, m.cfg.Paths.Raw))
 	case "/amendments":
 		return m.cmdAmendments()
 
@@ -567,8 +571,11 @@ func (m *Model) handleQuery(question string) tea.Cmd {
 
 	m.state = stateStreaming
 	m.loadingOp = randomThinkingPhrase()
+	ctx, cancel := context.WithCancel(context.Background())
+	m.cancelOp = cancel
 	return func() tea.Msg {
-		ch := m.rag.QueryStream(context.Background(), question, history)
+		defer cancel()
+		ch := m.rag.QueryStream(ctx, question, history)
 		return makeStreamListener(ch)()
 	}
 }
@@ -683,10 +690,12 @@ func (m *Model) cmdStatus() tea.Cmd {
 }
 
 func (m *Model) cmdPullFrom(rawDir string) tea.Cmd {
+	ctx, cancel := context.WithCancel(context.Background())
+	m.cancelOp = cancel
 	ch := make(chan string, 40)
 	go func() {
 		defer close(ch)
-		ctx := context.Background()
+		defer cancel()
 		summary, err := m.analyzer.AnalyzeFrom(ctx, rawDir, func(s string) { ch <- s })
 		_ = m.store.Save()
 		if err != nil {
@@ -712,10 +721,12 @@ func (m *Model) cmdPullFrom(rawDir string) tea.Cmd {
 }
 
 func (m *Model) cmdAnalyzeFrom(rawDir string) tea.Cmd {
+	ctx, cancel := context.WithCancel(context.Background())
+	m.cancelOp = cancel
 	ch := make(chan string, 20)
 	go func() {
 		defer close(ch)
-		ctx := context.Background()
+		defer cancel()
 		summary, err := m.analyzer.AnalyzeFrom(ctx, rawDir, func(s string) { ch <- s })
 		_ = m.store.Save()
 		if err != nil {
@@ -1307,6 +1318,38 @@ func detectNestedWikiRoot(wikiRoot string) string {
 	return ""
 }
 
+// resolvePath expands ~ to the home directory and makes the path absolute.
+func resolvePath(p string) string {
+	if strings.HasPrefix(p, "~/") {
+		if home, err := os.UserHomeDir(); err == nil {
+			p = filepath.Join(home, p[2:])
+		}
+	}
+	if abs, err := filepath.Abs(p); err == nil {
+		return abs
+	}
+	return p
+}
+
+func resolveSourceDir(args []string, projectPath, defaultPath string) string {
+	if len(args) == 0 {
+		return defaultPath
+	}
+	if isCurrentDirArg(args[0]) {
+		return projectPath
+	}
+	return resolvePath(args[0])
+}
+
+func isCurrentDirArg(arg string) bool {
+	switch arg {
+	case "-cd", "--cd", "--current-dir":
+		return true
+	default:
+		return false
+	}
+}
+
 func slugify(s string) string {
 	s = strings.ToLower(s)
 	var b strings.Builder
@@ -1529,9 +1572,11 @@ func helpText() string {
 	return `Commands:
 
   /pull             Scan raw/ → extract knowledge → wiki + knowledge-base
+  /pull --current-dir  Scan the project root instead of raw/
   /save <title>     Save last answer as wiki/synthesis/<slug>.md
   /sync             Re-embed changed wiki pages (after manual edits)
   /analyze          Force re-analyze raw/ (reprocess all files)
+  /analyze --current-dir  Re-analyze the project root instead of raw/
   /gap <topic>      Flag a missing topic — creates a research stub in wiki/sources/
   /fixwiki <name> <fix>  Correct a wiki page by name or path
                          Example: /fixwiki transformer activation should be ReLU not sigmoid
